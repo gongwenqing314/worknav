@@ -1,0 +1,5 @@
+/**
+ * 样式入口文件
+ * 引入全局样式和 CSS 变量
+ */
+@import '../assets/styles/global.css';

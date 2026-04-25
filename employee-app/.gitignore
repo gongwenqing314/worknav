@@ -1,0 +1,41 @@
+# Flutter 相关
+.dart_tool/
+.packages
+build/
+*.iml
+.idea/
+*.log
+
+# Android
+.android/
+local.properties
+gradle-wrapper.jar
+.gradle/
+
+# iOS
+.ios/
+Podfile.lock
+Pods/
+
+# macOS
+.macos/
+
+# Linux
+.linux/
+
+# Windows
+.windows/
+
+# Web
+.web/
+
+# 测试
+coverage/
+
+# 环境变量
+.env
+.env.*
+
+# 生成的文件
+*.g.dart
+*.freezed.dart
