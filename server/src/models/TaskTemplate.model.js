@@ -63,8 +63,20 @@ class TaskTemplateModel {
     const safeLimit = parseInt(limit, 10) || 20;
 
     const [rows] = await pool.execute(
-      `SELECT t.*, u.real_name as creator_name,
-              (SELECT COUNT(*) FROM template_steps ts WHERE ts.template_id = t.id) as step_count
+      `SELECT t.id,
+              t.creator_id as creatorId,
+              t.title as name,
+              t.description,
+              t.cover_image as coverImage,
+              t.category,
+              t.is_public as isPublic,
+              t.status,
+              t.estimated_minutes as estimatedMinutes,
+              t.created_at as createdAt,
+              t.updated_at as updatedAt,
+              u.real_name as creatorName,
+              (SELECT COUNT(*) FROM template_steps ts WHERE ts.template_id = t.id) as stepCount,
+              (SELECT COUNT(*) FROM task_instances ti WHERE ti.template_id = t.id) as useCount
        FROM task_templates t
        JOIN users u ON t.creator_id = u.id
        ${whereClause}

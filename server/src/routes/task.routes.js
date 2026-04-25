@@ -72,6 +72,18 @@ router.get('/instances', taskController.listInstances);
 router.get('/instances/:instanceId', taskController.getInstance);
 
 /**
+ * 更新任务实例
+ * PUT /api/v1/tasks/instances/:instanceId
+ */
+router.put('/instances/:instanceId', isCounselor, taskController.updateInstance);
+
+/**
+ * 删除任务实例
+ * DELETE /api/v1/tasks/instances/:instanceId
+ */
+router.delete('/instances/:instanceId', isCounselor, taskController.deleteInstance);
+
+/**
  * 分配任务
  * POST /api/v1/tasks/instances/assign
  * 仅辅导员和协管员可分配
@@ -86,6 +98,12 @@ router.post(
   ],
   taskController.assignTask
 );
+
+/**
+ * 创建任务实例
+ * POST /api/v1/tasks/instances
+ */
+router.post('/instances', authMiddleware, isCounselor, taskController.createInstance);
 
 /**
  * 开始执行任务

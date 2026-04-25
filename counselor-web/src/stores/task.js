@@ -61,8 +61,8 @@ export const useTaskStore = defineStore('task', {
       try {
         const queryParams = { ...this.queryParams, ...params }
         const res = await getTaskList(queryParams)
-        this.taskList = res.data?.list || res.data || []
-        this.total = res.data?.total || 0
+        this.taskList = res.data?.list || res.data?.data?.list || []
+        this.total = res.data?.total || res.data?.pagination?.total || 0
         return res
       } finally {
         this.listLoading = false

@@ -66,7 +66,7 @@ class UserModel {
    * 更新用户信息
    */
   static async update(id, fields) {
-    const allowedFields = ['real_name', 'phone', 'avatar', 'status', 'gender', 'birth_date', 'birthDate'];
+    const allowedFields = ['realName', 'phone', 'avatar', 'status', 'gender', 'birthDate'];
     const updates = [];
     const values = [];
 

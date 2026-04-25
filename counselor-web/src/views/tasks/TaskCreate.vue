@@ -92,6 +92,7 @@ const route = useRoute()
 const router = useRouter()
 const taskStore = useTaskStore()
 const isEdit = computed(() => !!route.params.id)
+const isFromTemplate = computed(() => !!route.query.templateId)
 const saving = ref(false)
 const formRef = ref(null)
 
@@ -143,6 +144,30 @@ async function fetchTaskDetail() {
   }
 }
 
+async function fetchTemplateSteps() {
+  if (!isFromTemplate.value) return
+  try {
+    const { getTemplateDetail } = await import('@/api/task')
+    const res = await getTemplateDetail(route.query.templateId)
+    const template = res.data
+    if (template) {
+      formData.title = template.name || template.title
+      formData.description = template.description || ''
+      formData.steps = (template.steps || []).map((s, index) => ({
+        id: s.id || `step-${Date.now()}-${index}`,
+        title: s.title || '',
+        description: s.description || '',
+        imageUrl: s.imageUrl || '',
+        audioUrl: s.audioUrl || '',
+        isKey: s.isKey || false,
+        sortOrder: s.sortOrder || index
+      }))
+    }
+  } catch (error) {
+    console.error('获取模板详情失败:', error)
+  }
+}
+
 async function handleSave() {
   try {
     await formRef.value.validate()
@@ -180,6 +205,7 @@ async function handleSave() {
 onMounted(() => {
   fetchEmployees()
   fetchTaskDetail()
+  fetchTemplateSteps()
 })
 </script>
 

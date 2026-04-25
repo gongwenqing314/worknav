@@ -116,6 +116,32 @@ class TaskService {
   }
 
   /**
+   * 创建任务实例（从模板）
+   */
+  async createInstance({ templateId, employeeId, assignedBy, scheduledDate, scheduledTime }) {
+    // 验证模板存在
+    const template = await TaskTemplateModel.findById(templateId);
+    if (!template) {
+      throw new Error('任务模板不存在');
+    }
+
+    // 创建任务实例
+    const instanceId = await TaskInstanceModel.create({
+      templateId,
+      employeeId,
+      assignedBy,
+      scheduledDate,
+      scheduledTime,
+    });
+
+    // 从模板初始化步骤
+    await StepExecutionModel.initFromTemplate(instanceId, templateId);
+
+    logger.info(`创建任务实例: 模板(${templateId}) -> 员工(${employeeId}), 实例ID: ${instanceId}`);
+    return instanceId;
+  }
+
+  /**
    * 开始执行任务
    */
   async startTask(instanceId, employeeId) {

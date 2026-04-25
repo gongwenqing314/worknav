@@ -56,6 +56,32 @@ class StepExecutionModel {
   }
 
   /**
+   * 批量创建步骤执行记录（自定义步骤）
+   */
+  static async batchCreate(stepDataArray) {
+    if (stepDataArray.length === 0) return 0;
+
+    const sql = `
+      INSERT INTO step_executions (instance_id, step_id, step_order, title, description, image_url, audio_url, is_key, status)
+      VALUES ?
+    `;
+    const values = stepDataArray.map(s => [
+      s.instanceId,
+      s.stepId || null,
+      s.stepOrder,
+      s.title,
+      s.description || '',
+      s.imageUrl || '',
+      s.audioUrl || '',
+      s.isKey ? 1 : 0,
+      s.status || 'pending',
+    ]);
+
+    const [result] = await pool.query(sql, [values]);
+    return result.affectedRows;
+  }
+
+  /**
    * 更新步骤状态
    */
   static async updateStatus(id, status, { durationSeconds = null, note = null } = {}) {

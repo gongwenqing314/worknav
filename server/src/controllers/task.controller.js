@@ -4,6 +4,7 @@
  */
 const TaskTemplateModel = require('../models/TaskTemplate.model');
 const TaskInstanceModel = require('../models/TaskInstance.model');
+const TemplateStepModel = require('../models/TemplateStep.model');
 const taskService = require('../services/task.service');
 const notificationService = require('../services/notification.service');
 const { success, created, notFound } = require('../utils/response');
@@ -106,6 +107,96 @@ class TaskController {
   // ========== 任务实例管理 ==========
 
   /**
+   * 创建任务实例
+   * POST /api/v1/tasks/instances
+   */
+  async createInstance(req, res, next) {
+    try {
+      const { templateId, employeeId, scheduledDate, scheduledTime, steps } = req.body;
+
+      let instanceId;
+
+      if (templateId) {
+        // 基于模板创建任务
+        instanceId = await taskService.createInstance({
+          templateId,
+          employeeId,
+          assignedBy: req.user.id,
+          scheduledDate,
+          scheduledTime,
+        });
+
+        // 获取模板信息用于通知
+        const template = await TaskTemplateModel.findById(templateId);
+        if (template) {
+          await notificationService.sendTaskAssigned(employeeId, {
+            instanceId,
+            templateTitle: template.title,
+            scheduledDate,
+            scheduledTime,
+          });
+        }
+      } else {
+        // 创建自定义任务（无前端的步骤数据）
+        const { title, description, employeeIds, priority, remark } = req.body;
+
+        // 1. 创建临时模板
+        const templateId = await TaskTemplateModel.create({
+          creatorId: req.user.id,
+          title,
+          description,
+          category: 'custom',
+          isPublic: 0,
+          estimatedMinutes: 30,
+        });
+
+        // 2. 创建模板步骤（如果有）
+        if (steps && steps.length > 0) {
+          const stepData = steps.map((step, index) => ({
+            templateId,
+            stepOrder: index + 1,
+            title: step.title,
+            description: step.description || '',
+            imageUrl: step.imageUrl || '',
+            audioUrl: step.audioUrl || '',
+            tip: step.tip || '',
+            estimatedSeconds: step.estimatedSeconds || 300,
+          }));
+          await TemplateStepModel.batchCreate(stepData);
+        }
+
+        // 3. 为每个员工创建任务实例
+        const employeeList = employeeIds || [employeeId];
+        const instanceIds = [];
+
+        for (const empId of employeeList) {
+          const instId = await taskService.createInstance({
+            templateId,
+            employeeId: empId,
+            assignedBy: req.user.id,
+            scheduledDate,
+            scheduledTime,
+          });
+          instanceIds.push(instId);
+
+          await notificationService.sendTaskAssigned(empId, {
+            instanceId: instId,
+            templateTitle: title,
+            scheduledDate,
+            scheduledTime,
+          });
+        }
+
+        instanceId = instanceIds[0];
+      }
+
+      return created(res, { instanceId }, '任务创建成功');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
    * 获取任务实例列表
    * GET /api/v1/tasks/instances
    */
@@ -145,7 +236,114 @@ class TaskController {
   async getInstance(req, res, next) {
     try {
       const progress = await taskService.getTaskProgress(req.params.instanceId);
-      return success(res, progress);
+      const { instance, steps } = progress;
+
+      // 格式化数据以适配前端编辑页面
+      const data = {
+        id: instance.id,
+        templateId: instance.template_id,
+        title: instance.title || instance.template_title,
+        description: instance.description || '',
+        employeeId: instance.employee_id,
+        employeeName: instance.employee_name,
+        scheduledDate: instance.scheduled_date,
+        scheduledTime: instance.scheduled_time,
+        status: instance.status,
+        priority: 'medium',
+        remark: instance.completion_note || '',
+        steps: steps.map(s => ({
+          id: s.id,
+          title: s.step_title || s.title,
+          description: s.step_description || s.description || '',
+          imageUrl: s.step_image || s.image_url || '',
+          audioUrl: s.audio_url || '',
+          sortOrder: s.step_order || s.sortOrder || 0,
+          isKey: s.is_key || s.isKey || false,
+          status: s.status,
+        })),
+        progress: progress.progress,
+      };
+
+      return success(res, data);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 更新任务实例
+   * PUT /api/v1/tasks/instances/:instanceId
+   */
+  async updateInstance(req, res, next) {
+    try {
+      const { instanceId } = req.params;
+      const { title, description, scheduledDate, scheduledTime, status, steps } = req.body;
+
+      // 获取当前任务实例
+      const currentInstance = await TaskInstanceModel.findById(instanceId);
+      if (!currentInstance) {
+        return notFound(res, '任务不存在');
+      }
+
+      // 如果更新了标题或描述，更新对应的模板
+      if (title || description) {
+        await TaskTemplateModel.update(currentInstance.template_id, {
+          ...(title && { title }),
+          ...(description && { description }),
+        });
+      }
+
+      // 更新任务实例
+      const updateFields = {};
+      if (scheduledDate) updateFields.scheduled_date = scheduledDate;
+      if (scheduledTime) updateFields.scheduled_time = scheduledTime;
+      if (status) updateFields.status = status;
+
+      if (Object.keys(updateFields).length > 0) {
+        await TaskInstanceModel.update(instanceId, updateFields);
+      }
+
+      // 如果提供了步骤，更新步骤
+      if (steps && steps.length > 0) {
+        const TemplateStepModel = require('../models/TemplateStep.model');
+        await TemplateStepModel.deleteByTemplateId(currentInstance.template_id);
+        
+        const stepData = steps.map((step, index) => ({
+          templateId: currentInstance.template_id,
+          stepOrder: index + 1,
+          title: step.title,
+          description: step.description || '',
+          imageUrl: step.imageUrl || '',
+          audioUrl: step.audioUrl || '',
+          tip: step.tip || '',
+          estimatedSeconds: step.estimatedSeconds || 300,
+        }));
+        await TemplateStepModel.batchCreate(stepData);
+      }
+
+      return success(res, null, '任务更新成功');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 删除任务实例
+   * DELETE /api/v1/tasks/instances/:instanceId
+   */
+  async deleteInstance(req, res, next) {
+    try {
+      const { instanceId } = req.params;
+
+      const currentInstance = await TaskInstanceModel.findById(instanceId);
+      if (!currentInstance) {
+        return notFound(res, '任务不存在');
+      }
+
+      // 删除任务实例（步骤执行记录会通过外键级联删除）
+      await TaskInstanceModel.delete(instanceId);
+
+      return success(res, null, '任务已删除');
     } catch (err) {
       next(err);
     }

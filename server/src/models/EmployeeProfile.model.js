@@ -101,7 +101,7 @@ class EmployeeProfileModel {
   static async count(counselorId = null) {
     try {
       const [rows] = await pool.execute(
-        `SELECT COUNT(*) as total FROM users WHERE role = 'employee' AND status = 1`
+        `SELECT COUNT(*) as total FROM users WHERE role = 'employee'`
       );
       return rows[0].total;
     } catch (error) {

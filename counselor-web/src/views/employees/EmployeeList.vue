@@ -37,7 +37,6 @@
           <template #default="{ row }">{{ row.gender === 'male' ? '男' : '女' }}</template>
         </el-table-column>
         <el-table-column prop="age" label="年龄" width="70" align="center" />
-        <el-table-column prop="age" label="年龄" width="70" align="center" />
         <el-table-column prop="disabilityType" label="残疾类型" width="120">
           <template #default="{ row }">
             {{ disabilityTypeMap[row.disabilityType] || row.disabilityType || '-' }}
@@ -199,8 +198,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getEmployeeList(queryParams)
-    employeeList.value = res.data?.list || res.data || []
-    total.value = res.data?.total || 0
+    employeeList.value = res.data?.list || res.data?.data?.list || []
+    total.value = res.data?.total || res.data?.pagination?.total || 0
   } catch (error) {
     console.error('获取员工列表失败:', error)
   } finally {
@@ -235,7 +234,15 @@ function handleCreate() {
 function handleEdit(row) {
   editingId.value = row.id
   dialogTitle.value = '编辑员工'
-  Object.assign(formData, row)
+  formData.name = row.name || ''
+  formData.gender = row.gender || 'male'
+  formData.birthDate = row.birthDate || ''
+  formData.disabilityType = row.disabilityType || ''
+  formData.groupId = row.groupId || ''
+  formData.guardianName = row.guardianName || ''
+  formData.guardianPhone = row.guardianPhone || ''
+  formData.remark = row.remark || ''
+  formData.status = row.status !== undefined ? row.status : 1
   dialogVisible.value = true
 }
 

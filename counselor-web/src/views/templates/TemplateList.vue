@@ -114,8 +114,8 @@ async function fetchData() {
   loading.value = true
   try {
     const res = await getTemplateList({ page: page.value, pageSize: pageSize.value, keyword: keyword.value, category: category.value })
-    templateList.value = res.data?.list || res.data || []
-    total.value = res.data?.total || 0
+    templateList.value = res.data?.list || res.data?.data?.list || []
+    total.value = res.data?.total || res.data?.pagination?.total || 0
   } catch (error) {
     console.error('获取模板列表失败:', error)
   } finally {
@@ -130,10 +130,37 @@ function handleCreate() {
   dialogVisible.value = true
 }
 
-function handleEdit(row) {
+async function handleEdit(row) {
   editingId.value = row.id
   dialogTitle.value = '编辑模板'
-  Object.assign(formData, row)
+  
+  // 获取模板详情以加载步骤
+  try {
+    const { getTemplateDetail } = await import('@/api/task')
+    const res = await getTemplateDetail(row.id)
+    const template = res.data
+    if (template) {
+      Object.assign(formData, {
+        name: template.name || template.title || row.name,
+        category: template.category || row.category,
+        description: template.description || row.description || '',
+        steps: (template.steps || []).map((s, index) => ({
+          id: s.id || `step-${Date.now()}-${index}`,
+          title: s.title || '',
+          description: s.description || '',
+          imageUrl: s.imageUrl || '',
+          audioUrl: s.audioUrl || '',
+          isKey: s.isKey || false,
+          sortOrder: s.sortOrder || index
+        }))
+      })
+    }
+  } catch (error) {
+    console.error('获取模板详情失败:', error)
+    // 回退到使用列表数据
+    Object.assign(formData, { name: row.name, category: row.category, description: row.description || '', steps: row.steps || [] })
+  }
+  
   dialogVisible.value = true
 }
 

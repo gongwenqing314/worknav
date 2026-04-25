@@ -10,7 +10,7 @@
 
     <!-- 拖拽排序列表 -->
     <draggable
-      v-model="steps"
+      :list="steps"
       item-key="id"
       handle=".step-handle"
       animation="200"
@@ -144,25 +144,28 @@ const uploadHeaders = {
 // 内部步骤数据
 const steps = ref([])
 
-// 初始化步骤数据
+// 初始化步骤数据（仅在首次或外部传入新数组时同步）
+let isInitialized = false
 watch(
   () => props.modelValue,
   (val) => {
-    if (val && val.length > 0) {
-      steps.value = val.map(s => ({ ...s, id: s.id || generateId() }))
-    } else if (steps.value.length === 0) {
-      // 默认添加一个空步骤
-      steps.value = [createEmptyStep()]
+    if (!isInitialized || val !== steps.value) {
+      if (val && val.length > 0) {
+        steps.value = val.map(s => ({ ...s, id: s.id || generateId() }))
+      } else if (!isInitialized) {
+        steps.value = [createEmptyStep()]
+      }
+      isInitialized = true
     }
   },
-  { immediate: true, deep: true }
+  { immediate: true }
 )
 
-// 同步到父组件
-watch(steps, (val) => {
-  emit('update:modelValue', val)
-  emit('change', val)
-}, { deep: true })
+// 通知父组件的函数
+function notifyChange() {
+  emit('update:modelValue', steps.value)
+  emit('change', steps.value)
+}
 
 /**
  * 创建空步骤
@@ -185,6 +188,7 @@ function createEmptyStep() {
  */
 function addStep() {
   steps.value.push(createEmptyStep())
+  notifyChange()
 }
 
 /**
@@ -193,6 +197,7 @@ function addStep() {
 function removeStep(index) {
   if (steps.value.length <= 1) return
   steps.value.splice(index, 1)
+  notifyChange()
 }
 
 /**
@@ -200,16 +205,17 @@ function removeStep(index) {
  */
 function toggleKeyStep(index) {
   steps.value[index].isKey = !steps.value[index].isKey
+  notifyChange()
 }
 
 /**
  * 拖拽结束回调
  */
 function onDragEnd() {
-  // 更新排序序号
   steps.value.forEach((step, index) => {
     step.sortOrder = index
   })
+  notifyChange()
 }
 
 /**

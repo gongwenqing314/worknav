@@ -61,10 +61,6 @@ class TaskInstanceModel {
     const conditions = [];
     const params = [];
 
-    // 通过辅导员-员工关联过滤
-    conditions.push(`ti.employee_id IN (SELECT employee_id FROM employee_counselor WHERE counselor_id = ?)`);
-    params.push(counselorId);
-
     if (status) {
       conditions.push('ti.status = ?');
       params.push(status);
@@ -80,7 +76,24 @@ class TaskInstanceModel {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     
     const [rows] = await pool.execute(
-      `SELECT ti.*, t.title as template_title, u.real_name as employee_name, u.avatar as employee_avatar
+      `SELECT ti.id,
+              ti.template_id as templateId,
+              ti.employee_id as employeeId,
+              ti.assigned_by as assignedBy,
+              ti.status,
+              ti.scheduled_date as scheduledDate,
+              ti.scheduled_time as scheduledTime,
+              ti.started_at as startedAt,
+              ti.completed_at as completedAt,
+              ti.completion_note as completionNote,
+              t.title,
+              t.cover_image as coverImage,
+              u.real_name as employeeName,
+              u.avatar as employeeAvatar,
+              (SELECT COUNT(*) FROM step_executions se WHERE se.instance_id = ti.id AND se.status = 'completed') as completedSteps,
+              (SELECT COUNT(*) FROM template_steps ts WHERE ts.template_id = ti.template_id) as totalSteps,
+              ti.created_at as createdAt,
+              ti.updated_at as updatedAt
        FROM task_instances ti
        JOIN task_templates t ON ti.template_id = t.id
        JOIN users u ON ti.employee_id = u.id
@@ -89,7 +102,17 @@ class TaskInstanceModel {
        LIMIT ${safeOffset}, ${safeLimit}`,
       params
     );
-    return rows;
+
+    // 计算完成率
+    return rows.map(row => {
+      const total = row.totalSteps || 0;
+      const completed = row.completedSteps || 0;
+      return {
+        ...row,
+        stepCount: total,
+        completionRate: total > 0 ? Math.round((completed / total) * 100) : 0
+      };
+    });
   }
 
   /**
@@ -166,6 +189,17 @@ class TaskInstanceModel {
     const [result] = await pool.execute(
       `UPDATE task_instances SET ${updates.join(', ')} WHERE id = ?`,
       values
+    );
+    return result.affectedRows;
+  }
+
+  /**
+   * 删除任务实例
+   */
+  static async delete(id) {
+    const [result] = await pool.execute(
+      'DELETE FROM task_instances WHERE id = ?',
+      [id]
     );
     return result.affectedRows;
   }

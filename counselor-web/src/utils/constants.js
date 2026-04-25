@@ -19,29 +19,30 @@ export const ROLE_LABELS = {
 
 // ===== 任务状态 =====
 export const TASK_STATUS = {
-  DRAFT: 'draft',           // 草稿
-  PENDING: 'pending',       // 待执行
+  ASSIGNED: 'assigned',     // 已分配
+  PENDING: 'assigned',      // 待执行（别名）
   IN_PROGRESS: 'in_progress', // 执行中
+  PAUSED: 'paused',         // 已暂停
   COMPLETED: 'completed',   // 已完成
   CANCELLED: 'cancelled'    // 已取消
 }
 
 // ===== 任务状态标签 =====
 export const TASK_STATUS_LABELS = {
-  [TASK_STATUS.DRAFT]: '草稿',
-  [TASK_STATUS.PENDING]: '待执行',
-  [TASK_STATUS.IN_PROGRESS]: '执行中',
-  [TASK_STATUS.COMPLETED]: '已完成',
-  [TASK_STATUS.CANCELLED]: '已取消'
+  assigned: '待执行',
+  in_progress: '执行中',
+  paused: '已暂停',
+  completed: '已完成',
+  cancelled: '已取消'
 }
 
 // ===== 任务状态颜色 =====
 export const TASK_STATUS_COLORS = {
-  [TASK_STATUS.DRAFT]: 'info',
-  [TASK_STATUS.PENDING]: 'warning',
-  [TASK_STATUS.IN_PROGRESS]: 'primary',
-  [TASK_STATUS.COMPLETED]: 'success',
-  [TASK_STATUS.CANCELLED]: 'danger'
+  assigned: 'warning',
+  in_progress: 'primary',
+  paused: 'info',
+  completed: 'success',
+  cancelled: 'danger'
 }
 
 // ===== 情绪类型 =====
