@@ -17,6 +17,7 @@
   - [1. 后端服务部署](#1-后端服务部署)
   - [2. 辅导员端 Web 部署](#2-辅导员端-web-部署)
   - [3. 员工端 APP 构建](#3-员工端-app-构建)
+  - [4. 员工端 Web 构建（Flutter Web）](#4-员工端-web-构建flutter-web)
 - [配置说明](#配置说明)
 - [功能模块说明](#功能模块说明)
 - [API 接口文档](#api-接口文档)
@@ -64,34 +65,36 @@
 ## 系统架构
 
 ```
-┌─────────────────────────────────────────────────────┐
-│                    客户端层                          │
-│  ┌──────────────────┐    ┌──────────────────────┐   │
-│  │  Flutter 移动端   │    │  Vue 3 Web 管理后台   │   │
-│  │  (员工端 APP)     │    │  (辅导员/家长/雇主端)  │   │
-│  └────────┬─────────┘    └──────────┬───────────┘   │
-└───────────┼──────────────────────────┼───────────────┘
-            │   HTTPS / WebSocket      │
-┌───────────┼──────────────────────────┼───────────────┐
-│           ▼        服务层            ▼               │
-│  ┌─────────────────────────────────────────────┐     │
-│  │         Node.js + Express API 服务           │     │
-│  │    ┌──────────┐  ┌──────────┐  ┌─────────┐ │     │
-│  │    │ 用户服务  │  │ 任务服务  │  │ 消息服务 │ │     │
-│  │    └──────────┘  └──────────┘  └─────────┘ │     │
-│  │    ┌──────────┐  ┌──────────┐  ┌─────────┐ │     │
-│  │    │ 情绪服务  │  │ 统计服务  │  │ 文件服务 │ │     │
-│  │    └──────────┘  └──────────┘  └─────────┘ │     │
-│  └────────────────────┬────────────────────────┘     │
-│                       │                              │
-│  ┌────────────────────┼────────────────────────┐     │
-│  │         数据层      ▼                        │     │
-│  │    ┌──────────┐         ┌──────────────┐    │     │
-│  │    │  MySQL   │◄───────►│    Redis     │    │     │
-│  │    └──────────┘         └──────────────┘    │     │
-│  └─────────────────────────────────────────────┘     │
-└─────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│                       客户端层                           │
+│  ┌──────────────────┐  ┌──────────────┐  ┌────────────┐ │
+│  │  Flutter 移动端   │  │  Flutter Web  │  │  Vue 3 Web │ │
+│  │  (员工端 APP)     │  │ (员工端 Web)  │  │ (管理后台)  │ │
+│  └────────┬─────────┘  └──────┬───────┘  └─────┬──────┘ │
+└───────────┼───────────────────┼─────────────────┼────────┘
+            │   HTTPS / WebSocket               │
+┌───────────┼───────────────────┼─────────────────┼────────┐
+│           ▼        服务层     ▼                 ▼        │
+│  ┌──────────────────────────────────────────────────┐    │
+│  │          Node.js + Express API 服务               │    │
+│  │   ┌──────────┐ ┌──────────┐ ┌────────────────┐  │    │
+│  │   │ 用户服务  │ │ 任务服务  │ │  消息/通知服务  │  │    │
+│  │   └──────────┘ └──────────┘ └────────────────┘  │    │
+│  │   ┌──────────┐ ┌──────────┐ ┌────────────────┐  │    │
+│  │   │ 情绪服务  │ │ 统计服务  │ │  远程协助服务   │  │    │
+│  │   └──────────┘ └──────────┘ └────────────────┘  │    │
+│  └─────────────────────┬────────────────────────────┘    │
+│                        │                                 │
+│  ┌─────────────────────┼────────────────────────────┐    │
+│  │          数据层      ▼                             │    │
+│  │   ┌──────────┐          ┌──────────────┐         │    │
+│  │   │  MySQL   │◄────────►│    Redis     │         │    │
+│  │   └──────────┘          └──────────────┘         │    │
+│  └──────────────────────────────────────────────────┘    │
+└─────────────────────────────────────────────────────────┘
 ```
+
+> **Flutter Web 同源部署**：员工端 Flutter Web 构建产物部署在后端 `/employee-app/` 路径下，由 Express 静态文件服务直接托管，无需独立 Web 服务器，避免 CORS 跨域问题。
 
 ---
 
@@ -99,13 +102,13 @@
 
 | 层级 | 技术选型 | 版本 | 说明 |
 |------|----------|------|------|
-| 移动端（员工端） | Flutter | 3.10+ | 跨平台开发，iOS + Android |
-| Web 端（辅导员端） | Vue 3 + Element Plus | 3.4+ | 管理后台 |
-| 后端服务 | Node.js + Express | 18+ | RESTful API + WebSocket |
+| 移动端（员工端） | Flutter + Dart | 3.10+ / 3.0+ | 跨平台开发，iOS + Android + Web |
+| Web 端（辅导员端） | Vue 3 + Element Plus + Pinia | 3.4+ / 2.6+ | 管理后台 |
+| 后端服务 | Node.js + Express | 18+ / 4.21+ | RESTful API + WebSocket |
 | 数据库 | MySQL | 8.0+ | 关系型数据库 |
 | 缓存 | Redis (ioredis) | 7.0+ | 会话/缓存/消息队列 |
-| 实时通信 | Socket.IO | 4.x | WebSocket 消息推送 |
-| 文件存储 | 云对象存储（OSS） | - | 图片/音频/视频 |
+| 实时通信 | Socket.IO | 4.7+ | WebSocket 消息推送 |
+| 文件存储 | 云对象存储（OSS）/ 本地 | - | 图片/音频/视频 |
 | 离线存储 | SQLite（移动端） | - | 本地数据缓存 |
 | 部署环境 | 国内云服务 | - | 阿里云/腾讯云 |
 
@@ -118,29 +121,37 @@ worknav/
 ├── server/                          # 后端服务（Node.js + Express）
 │   ├── package.json
 │   ├── .env.example                 # 环境变量模板
+│   ├── seed.js                      # 种子数据脚本
 │   ├── src/
-│   │   ├── app.js                   # 应用入口
+│   │   ├── app.js                   # 应用入口（含 Flutter Web 静态服务）
 │   │   ├── config/                  # 配置（数据库/Redis/JWT）
-│   │   ├── controllers/             # 控制器（10个模块）
+│   │   ├── controllers/             # 控制器（10 个模块）
 │   │   ├── middlewares/             # 中间件（认证/权限/校验/错误处理）
-│   │   ├── models/                  # 数据模型（17个表）
+│   │   ├── models/                  # 数据模型（19 个表）
 │   │   ├── routes/                  # 路由定义（RESTful）
 │   │   ├── services/                # 业务逻辑服务
 │   │   ├── utils/                   # 工具函数
 │   │   └── websocket/               # WebSocket 实时通信
 │   ├── database/
 │   │   └── init.sql                 # 数据库初始化脚本
-│   └── migrations/
-│       └── seed.sql                 # 种子数据
+│   ├── migrations/
+│   │   └── seed.sql                 # 种子数据
+│   └── public/
+│       └── employee-app/            # Flutter Web 构建产物（同源部署）
 │
 ├── employee-app/                    # 员工端 APP（Flutter）
 │   ├── pubspec.yaml
 │   ├── lib/
 │   │   ├── main.dart                # 应用入口
+│   │   ├── app.dart                 # MaterialApp 配置
 │   │   ├── core/                    # 核心层（常量/网络/主题/工具）
+│   │   │   ├── constants/           # API 地址、存储键名
+│   │   │   ├── network/             # DioClient、SyncService
+│   │   │   ├── theme/               # AppTheme（高对比度无障碍主题）
+│   │   │   └── utils/               # StorageUtil、AudioPlayer
 │   │   ├── features/                # 功能模块
-│   │   │   ├── auth/                # 启动/自动登录
-│   │   │   ├── home/                # 主页/今日任务
+│   │   │   ├── auth/                # 启动页/自动登录（设备登录）
+│   │   │   ├── home/                # 主页/今日任务列表
 │   │   │   ├── task/                # 任务执行/步骤引导
 │   │   │   ├── communication/       # 沟通板
 │   │   │   ├── emotion/             # 情绪温度计
@@ -148,7 +159,11 @@ worknav/
 │   │   │   ├── reminders/           # 提醒服务
 │   │   │   └── settings/            # 设置
 │   │   └── shared/                  # 共享（模型/组件/服务）
-│   └── assets/                      # 资源文件
+│   │       ├── models/              # TaskInstance 等数据模型
+│   │       ├── services/            # AuthService、TaskService 等
+│   │       └── widgets/             # 通用 UI 组件
+│   ├── assets/                      # 资源文件（图片/音频）
+│   └── web/                         # Flutter Web 资源（index.html、图标）
 │
 ├── counselor-web/                   # 辅导员端 Web（Vue 3）
 │   ├── package.json
@@ -158,10 +173,10 @@ worknav/
 │   │   ├── api/                     # API 接口层
 │   │   ├── components/              # 通用组件
 │   │   ├── composables/             # 组合式函数
-│   │   ├── router/                  # 路由配置
+│   │   ├── router/                  # 路由配置（22 个页面）
 │   │   ├── stores/                  # Pinia 状态管理
 │   │   ├── utils/                   # 工具函数
-│   │   └── views/                   # 页面视图（22个页面）
+│   │   └── views/                   # 页面视图
 │   └── public/                      # 静态资源
 │
 └── docs/                            # 项目文档
@@ -191,7 +206,7 @@ worknav/
 | Dart | >= 3.0.0 | Flutter 自带 |
 | Xcode | >= 15.0 | iOS 构建需要（仅 macOS） |
 | Android SDK | >= 33 | Android 构建需要 |
-| Android Studio / VS Code | 最新版 | IDE |
+| Chrome | 最新版 | Flutter Web 调试 |
 
 ### 辅导员端 Web
 
@@ -241,7 +256,7 @@ REDIS_PASSWORD=
 
 # JWT 密钥
 JWT_SECRET=your_jwt_secret_key_at_least_32_chars
-JWT_EXPIRES_IN=2h
+JWT_EXPIRES_IN=24h
 JWT_REFRESH_SECRET=your_refresh_secret_key
 JWT_REFRESH_EXPIRES_IN=7d
 
@@ -251,12 +266,6 @@ OSS_ACCESS_KEY=your_oss_key
 OSS_SECRET_KEY=your_oss_secret
 OSS_BUCKET=worknav-files
 OSS_REGION=oss-cn-hangzhou
-
-# 短信服务（可选）
-SMS_ACCESS_KEY=
-SMS_SECRET_KEY=
-SMS_SIGN_NAME=工作导航
-SMS_TEMPLATE_CODE=
 
 # WebSocket
 SOCKET_CORS_ORIGIN=http://localhost:5173,http://localhost:8080
@@ -271,7 +280,7 @@ mysql -u root -p -e "CREATE DATABASE worknav CHARACTER SET utf8mb4 COLLATE utf8m
 # 执行建表脚本
 mysql -u root -p worknav < database/init.sql
 
-# 导入种子数据（可选）
+# 导入种子数据（可选，包含测试账号和示例数据）
 mysql -u root -p worknav < migrations/seed.sql
 ```
 
@@ -285,19 +294,17 @@ npm run dev
 npm start
 ```
 
-服务启动后访问：
+服务启动后：
 - API 地址：`http://localhost:3000/api/v1`
 - WebSocket 地址：`ws://localhost:3000`
-- API 文档（如配置了 swagger）：`http://localhost:3000/api-docs`
+- 员工端 Web：`http://localhost:3000/employee-app/`
+- 根路径健康检查：`http://localhost:3000/`
 
 #### 1.5 验证服务
 
 ```bash
-# 健康检查
-curl http://localhost:3000/api/v1/health
-
-# 预期响应
-# {"code":200,"message":"success","data":{"status":"ok","timestamp":"..."}}
+curl http://localhost:3000/
+# 预期响应：{"code":200,"message":"工作导航 API 服务运行中","data":{...}}
 ```
 
 ---
@@ -351,39 +358,6 @@ npm run build
 
 构建产物在 `dist/` 目录，可部署到 Nginx/CDN。
 
-#### 2.5 Nginx 配置示例
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-
-    # 前端静态文件
-    location / {
-        root /var/www/worknav/counselor-web/dist;
-        index index.html;
-        try_files $uri $uri/ /index.html;
-    }
-
-    # API 反向代理
-    location /api/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # WebSocket 代理
-    location /socket.io/ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-    }
-}
-```
-
 ---
 
 ### 3. 员工端 APP 构建
@@ -404,11 +378,11 @@ flutter pub get
 
 #### 3.3 配置 API 地址
 
-编辑 `lib/core/constants/api_constants.dart`，修改 `baseUrl`：
+编辑 `lib/core/constants/api_constants.dart`：
 
 ```dart
 class ApiConstants {
-  // 开发环境
+  // 移动端开发环境（根据设备类型选择）
   static const String baseUrl = 'http://10.0.2.2:3000/api/v1'; // Android 模拟器
   // static const String baseUrl = 'http://localhost:3000/api/v1'; // iOS 模拟器
 
@@ -418,6 +392,8 @@ class ApiConstants {
   static const String wsUrl = 'ws://10.0.2.2:3000';
 }
 ```
+
+> **注意**：Flutter Web 版本使用相对路径 `/api/v1`，无需手动配置 baseUrl（同源部署）。
 
 #### 3.4 运行调试
 
@@ -446,11 +422,42 @@ flutter build appbundle --release
 
 # iOS（需要 macOS + Xcode）
 flutter build ios --release
+
+# Web（部署到后端同源目录）
+flutter build web --release --base-href "/employee-app/"
 ```
 
 构建产物位置：
 - Android APK: `build/app/outputs/flutter-apk/app-release.apk`
 - iOS: `build/ios/iphoneos/Runner.app`
+- Web: `build/web/`
+
+---
+
+### 4. 员工端 Web 构建（Flutter Web）
+
+员工端 Flutter Web 采用**同源部署**方案，构建产物直接由后端 Express 静态文件服务托管。
+
+#### 4.1 构建
+
+```bash
+cd employee-app
+flutter build web --release --base-href "/employee-app/"
+```
+
+#### 4.2 部署到后端
+
+将构建产物复制到后端静态文件目录：
+
+```bash
+cp -r build/web/* ../server/public/employee-app/
+```
+
+#### 4.3 访问
+
+启动后端服务后，访问 `http://localhost:3000/employee-app/` 即可使用员工端 Web 版。
+
+> **同源部署优势**：无需独立 Web 服务器，不存在 CORS 跨域问题，API 请求自动使用相对路径。
 
 ---
 
@@ -463,7 +470,7 @@ flutter build ios --release
 | `PORT` | 服务端口 | 3000 |
 | `NODE_ENV` | 运行环境（development/production） | development |
 | `JWT_SECRET` | JWT 签名密钥（**必须修改**） | - |
-| `JWT_EXPIRES_IN` | Access Token 有效期 | 2h |
+| `JWT_EXPIRES_IN` | Access Token 有效期 | 24h |
 | `DB_HOST` | MySQL 地址 | localhost |
 | `REDIS_HOST` | Redis 地址 | localhost |
 | `UPLOAD_MAX_SIZE` | 文件上传大小限制 | 50MB |
@@ -472,7 +479,8 @@ flutter build ios --release
 
 | 配置项 | 文件 | 说明 |
 |--------|------|------|
-| API 地址 | `lib/core/constants/api_constants.dart` | 后端 API 基础 URL |
+| API 地址（移动端） | `lib/core/constants/api_constants.dart` | 后端 API 基础 URL |
+| API 地址（Web） | 自动使用相对路径 `/api/v1` | 同源部署，无需配置 |
 | 主题色 | `lib/core/theme/app_theme.dart` | 主色调、字体大小 |
 | 离线缓存 | `lib/core/network/sync_service.dart` | 同步间隔、队列大小 |
 
@@ -497,7 +505,7 @@ flutter build ios --release
 4. 保存模板后，在「排班管理」中将任务分配给员工
 
 **员工端体验：**
-1. 打开 APP，自动显示今日任务列表（大图标卡片）
+1. 打开 APP，自动显示今日任务列表（大图标卡片、统计面板）
 2. 点击任务进入步骤引导界面
 3. 查看大图片 + 文字说明，完成操作后点击绿色大勾
 4. 关键步骤自动播放语音提示 + 震动反馈
@@ -540,9 +548,9 @@ flutter build ios --release
 
 ### 接口规范
 
-- 基础路径：`/api/v1`
-- 认证方式：Bearer Token（JWT）
-- 响应格式：
+- **基础路径**：`/api/v1`
+- **认证方式**：Bearer Token（JWT）
+- **响应格式**：
 
 ```json
 {
@@ -554,120 +562,158 @@ flutter build ios --release
 
 ### 核心接口列表
 
-#### 认证模块
+#### 认证模块 (`/auth`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | /auth/register | 辅导员注册 | 公开 |
-| POST | /auth/login | 登录 | 公开 |
-| POST | /auth/refresh-token | 刷新 Token | 已登录 |
-| POST | /auth/logout | 登出 | 已登录 |
+| POST | /auth/register | 用户注册 | 公开 |
+| POST | /auth/login | 用户登录（用户名/手机号+密码） | 公开 |
+| POST | /auth/device-login | 设备自动登录（员工端 Flutter Web） | 公开 |
+| POST | /auth/refresh | 刷新 Token | 公开 |
+| POST | /auth/logout | 登出 | 已认证 |
+| PUT | /auth/password | 修改密码 | 已认证 |
+| GET | /auth/me | 获取当前用户信息 | 已认证 |
 
-#### 用户管理
-
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | /users/profile | 获取当前用户信息 | 已登录 |
-| PUT | /users/profile | 更新个人信息 | 已登录 |
-| GET | /users/employees | 员工列表 | 辅导员 |
-| POST | /users/employees | 创建员工账号 | 辅导员 |
-| GET | /users/employees/:id | 员工详情 | 辅导员/家长 |
-| POST | /users/employees/:id/bind-parent | 绑定家长 | 主辅导员 |
-| GET | /users/parents | 家长列表 | 辅导员 |
-
-#### 任务管理
+#### 用户管理 (`/users`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| GET | /tasks/templates | 任务模板列表 | 辅导员 |
+| GET | /users | 获取用户列表 | 辅导员 |
+| GET | /users/:id | 获取用户详情 | 已认证 |
+| PUT | /users/:id | 更新用户信息 | 已认证 |
+| DELETE | /users/:id | 禁用用户 | 辅导员 |
+| GET | /users/groups | 获取员工分组列表 | 已认证 |
+| POST | /users/groups | 创建员工分组 | 辅导员 |
+| POST | /users/employees | 创建员工（含账号和档案） | 辅导员 |
+| PUT | /users/employees/:employeeId | 更新员工信息 | 辅导员 |
+| DELETE | /users/employees/:employeeId | 删除员工 | 辅导员 |
+| GET | /users/employees/list | 获取员工列表（含档案） | 辅导员 |
+| GET | /users/employees/:employeeId/profile | 获取员工档案详情 | 可访问该员工 |
+| POST | /users/employees/:employeeId/profile | 创建/更新员工档案 | 辅导员 |
+| GET | /users/employees/:employeeId/counselors | 获取员工的辅导员列表 | 可访问该员工 |
+| POST | /users/employees/:employeeId/counselors | 添加辅导员关联 | 辅导员 |
+| DELETE | /users/employees/:employeeId/counselors/:counselorId | 删除辅导员关联 | 辅导员 |
+| GET | /users/employees/:employeeId/parents | 获取员工的家长列表 | 可访问该员工 |
+| POST | /users/employees/:employeeId/parents | 发起家长关联请求 | 辅导员 |
+| GET | /users/employees/:employeeId/parent-requests | 获取待审核家长关联请求 | 可访问该员工 |
+| PUT | /users/parents/requests/:requestId | 审核家长关联请求 | 已认证 |
+| GET | /users/parents/my-employees | 获取家长关联的员工列表 | 家长 |
+
+#### 任务管理 (`/tasks`)
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | /tasks/templates | 获取任务模板列表 | 已认证 |
+| GET | /tasks/templates/:templateId | 获取任务模板详情 | 已认证 |
 | POST | /tasks/templates | 创建任务模板 | 辅导员 |
-| GET | /tasks/templates/:id | 模板详情 | 辅导员 |
-| PUT | /tasks/templates/:id | 更新模板 | 辅导员 |
-| DELETE | /tasks/templates/:id | 删除模板 | 辅导员 |
-| POST | /tasks/templates/:id/copy | 复制模板 | 辅导员 |
-| GET | /tasks/templates/public | 公共模板（V2.0 预留） | 辅导员 |
-| GET | /tasks/instances | 任务实例列表 | 辅导员/员工 |
-| POST | /tasks/instances/:id/start | 开始任务 | 员工 |
-| POST | /tasks/instances/:id/steps/:stepId/complete | 完成步骤 | 员工 |
-| POST | /tasks/instances/:id/complete | 完成任务 | 员工 |
+| PUT | /tasks/templates/:templateId | 更新任务模板 | 辅导员 |
+| DELETE | /tasks/templates/:templateId | 删除任务模板 | 辅导员 |
+| GET | /tasks/today | 获取今日任务（员工端） | 员工 |
+| GET | /tasks/instances | 获取任务实例列表 | 已认证 |
+| GET | /tasks/instances/:instanceId | 获取任务实例详情 | 已认证 |
+| PUT | /tasks/instances/:instanceId | 更新任务实例 | 辅导员 |
+| DELETE | /tasks/instances/:instanceId | 删除任务实例 | 辅导员 |
+| POST | /tasks/instances/assign | 分配任务 | 辅导员 |
+| POST | /tasks/instances | 创建任务实例 | 辅导员 |
+| POST | /tasks/instances/:instanceId/start | 开始执行任务 | 员工 |
+| POST | /tasks/instances/:instanceId/pause | 暂停任务 | 员工 |
+| POST | /tasks/instances/:instanceId/cancel | 取消任务 | 已认证 |
+| POST | /tasks/instances/:instanceId/complete | 完成任务 | 员工 |
+| POST | /tasks/instances/:instanceId/help | 请求帮助 | 员工 |
+| POST | /tasks/steps/:executionId/start | 开始执行步骤 | 员工 |
+| POST | /tasks/steps/:executionId/complete | 完成步骤 | 员工 |
+| GET | /tasks/:taskId/executions | 获取任务执行记录（监控） | 已认证 |
 
-#### 排班管理
-
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | /schedules | 排班列表 | 辅导员 |
-| POST | /schedules | 创建排班 | 辅导员 |
-| GET | /schedules/today | 今日排班 | 员工 |
-| GET | /schedules/week | 一周排班概览 | 辅导员 |
-
-#### 情绪管理
-
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| POST | /emotions/record | 记录情绪 | 员工 |
-| GET | /emotions/history | 情绪历史 | 辅导员/家长 |
-| GET | /emotions/alerts | 预警列表 | 辅导员 |
-| PUT | /emotions/alert-rules/:id | 更新预警规则 | 辅导员 |
-
-#### 沟通板
+#### 排班管理 (`/schedules`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| GET | /communication/categories | 分类列表 | 辅导员/员工 |
+| GET | /schedules?date= | 获取某日排班列表 | 已认证 |
+| GET | /schedules/week?startDate= | 获取一周排班概览 | 已认证 |
+| POST | /schedules/batch | 批量排班 | 辅导员 |
+
+#### 情绪管理 (`/emotions`)
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | /emotions/overview | 获取所有员工实时情绪概览 | 辅导员 |
+| GET | /emotions/alerts | 获取预警列表 | 辅导员 |
+| POST | /emotions/alerts/:alertId/handle | 处理预警 | 辅导员 |
+| GET | /emotions/alert-rules | 获取预警规则列表 | 辅导员 |
+| POST | /emotions/alert-rules | 创建预警规则 | 辅导员 |
+| PUT | /emotions/alert-rules/:ruleId | 更新预警规则 | 辅导员 |
+| DELETE | /emotions/alert-rules/:ruleId | 删除预警规则 | 辅导员 |
+| GET | /emotions/today | 获取今日情绪记录 | 员工 |
+| POST | /emotions/record | 记录情绪（员工自记录） | 员工 |
+| POST | /emotions/:employeeId | 记录情绪（辅导员代记录） | 辅导员 |
+| GET | /emotions/:employeeId | 获取情绪记录列表 | 可访问该员工 |
+| GET | /emotions/:employeeId/stats | 获取情绪统计 | 可访问该员工 |
+
+#### 沟通板 (`/communication`)
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| GET | /communication/categories | 获取所有分类 | 公开/可选认证 |
+| GET | /communication/categories/:categoryId | 获取分类详情（含常用语） | 公开/可选认证 |
+| GET | /communication/search | 搜索常用语 | 公开/可选认证 |
 | POST | /communication/categories | 创建分类 | 辅导员 |
-| GET | /communication/phrases | 常用语列表 | 辅导员/员工 |
-| POST | /communication/phrases | 创建常用语 | 辅导员 |
-| PUT | /communication/phrases/:id | 更新常用语 | 辅导员 |
-| DELETE | /communication/phrases/:id | 删除常用语 | 辅导员 |
+| PUT | /communication/categories/:categoryId | 更新分类 | 辅导员 |
+| DELETE | /communication/categories/:categoryId | 删除分类 | 辅导员 |
+| GET | /communication/phrases | 获取所有常用语 | 已认证 |
+| GET | /communication/categories/:categoryId/phrases | 获取分类下常用语 | 已认证 |
+| POST | /communication/categories/:categoryId/phrases | 创建常用语 | 辅导员 |
+| POST | /communication/categories/:categoryId/phrases/batch | 批量创建常用语 | 辅导员 |
+| PUT | /communication/phrases/:phraseId | 更新常用语 | 辅导员 |
+| DELETE | /communication/phrases/:phraseId | 删除常用语 | 辅导员 |
 
-#### 消息通知
-
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | /notifications | 通知列表 | 已登录 |
-| POST | /notifications | 发送通知 | 辅导员 |
-| PUT | /notifications/:id/read | 标记已读 | 已登录 |
-| POST | /notifications/batch-read | 批量已读 | 已登录 |
-
-> 消息类型支持：`support_alert`（支持请求预警）、`remote_assist`（远程协助请求）、`task_complete`（任务完成）、`encouragement`（鼓励消息）、`voice_cheer`（语音鼓励）、`schedule_update`（排班更新）、`reminder_unconfirmed`（提醒未确认）
-
-#### 远程协助
+#### 消息通知 (`/notifications`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | /remote-assist/sessions | 创建协助会话 | 员工 |
-| GET | /remote-assist/sessions | 协助会话列表 | 辅导员 |
-| POST | /remote-assist/sessions/:id/accept | 接受协助 | 辅导员 |
-| POST | /remote-assist/sessions/:id/messages | 发送消息 | 辅导员/员工 |
-| GET | /remote-assist/sessions/:id/messages | 消息列表 | 辅导员/员工 |
-| POST | /remote-assist/sessions/:id/complete | 结束协助 | 辅导员 |
+| GET | /notifications | 获取通知列表 | 已认证 |
+| POST | /notifications | 发送通知 | 已认证 |
+| GET | /notifications/unread-count | 获取未读通知数量 | 已认证 |
+| PUT | /notifications/read-all | 全部标记已读 | 已认证 |
+| POST | /notifications/voice-cheer | 发送语音加油 | 已认证 |
+| PUT | /notifications/:notificationId/read | 标记已读 | 已认证 |
+| DELETE | /notifications/:notificationId | 删除通知 | 已认证 |
 
-#### 数据统计
+> 消息类型支持：`task_assigned`（任务分配）、`task_reminder`（任务提醒）、`emotion_alert`（情绪预警）、`voice_cheer`（语音鼓励）、`system`（系统通知）、`assist_request`（协助请求）、`assist_message`（协助消息）
 
-| 方法 | 路径 | 说明 | 权限 |
-|------|------|------|------|
-| GET | /statistics/dashboard | 仪表盘数据 | 辅导员 |
-| GET | /statistics/task-completion | 任务完成率 | 辅导员 |
-| GET | /statistics/step-duration-analysis | 步骤耗时分析（卡顿热点） | 辅导员 |
-| GET | /statistics/emotion-trends | 情绪趋势 | 辅导员 |
-| GET | /statistics/employee-overview/:id | 员工工作概览 | 辅导员/家长 |
-
-#### 设备管理
+#### 远程协助 (`/remote-assist`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| GET | /devices/employee/:id | 员工设备列表 | 辅导员 |
-| POST | /devices/bind-code | 生成绑定码 | 辅导员 |
-| POST | /devices/activate | 激活新设备 | 员工 |
-| DELETE | /devices/:deviceId | 远程解绑设备 | 辅导员 |
+| POST | /remote-assist/sessions | 创建协助请求（含照片上传） | 员工 |
+| GET | /remote-assist/sessions/pending | 获取待接听协助列表 | 辅导员 |
+| GET | /remote-assist/sessions | 获取协助会话列表 | 已认证 |
+| GET | /remote-assist/sessions/:sessionId | 获取会话详情（含消息历史） | 已认证 |
+| POST | /remote-assist/sessions/:sessionId/accept | 接听协助请求 | 辅导员 |
+| POST | /remote-assist/sessions/:sessionId/messages | 发送消息（含文件上传） | 已认证 |
+| GET | /remote-assist/sessions/:sessionId/messages | 获取会话消息历史 | 已认证 |
+| POST | /remote-assist/sessions/:sessionId/annotation | 上传标注图片 | 辅导员 |
+| POST | /remote-assist/sessions/:sessionId/end | 结束协助会话（可含评分） | 已认证 |
 
-#### 离线同步
+#### 数据统计 (`/statistics`)
 
 | 方法 | 路径 | 说明 | 权限 |
 |------|------|------|------|
-| POST | /sync/upload | 上传离线数据 | 员工 |
-| GET | /sync/pending | 获取待同步数据 | 员工 |
-| POST | /sync/confirm | 确认同步完成 | 员工 |
+| GET | /statistics/dashboard | 系统概览（仪表盘） | 辅导员 |
+| GET | /statistics/task-completion?range= | 任务完成率统计 | 已认证 |
+| GET | /statistics/step-duration?templateId=&range= | 步骤耗时分析（卡顿热点） | 已认证 |
+| GET | /statistics/employee-overview?employeeId= | 员工工作概览 | 已认证 |
+| GET | /statistics/emotion | 情绪统计数据 | 辅导员 |
+| GET | /statistics/employee-work | 员工工作统计 | 辅导员 |
+
+#### 设备管理 (`/devices`)
+
+| 方法 | 路径 | 说明 | 权限 |
+|------|------|------|------|
+| POST | /devices/bind-code | 生成绑定码 | 已认证 |
+| POST | /devices/bind | 使用绑定码绑定设备 | 已认证 |
+| GET | /devices | 获取当前用户设备列表 | 已认证 |
+| POST | /devices/:bindingId/unbind | 解绑设备 | 已认证 |
+| PUT | /devices/:deviceId/heartbeat | 设备心跳 | 已认证 |
 
 ---
 
@@ -678,11 +724,14 @@ flutter build ios --release
 ```
 users (用户表)
   ├── employee_profiles (员工档案)     [1:1]
+  ├── employee_groups (员工分组)       [N:1]
   ├── employee_counselor (员工-辅导员)  [N:M]
   ├── employee_parent (员工-家长)      [N:M]
   ├── task_templates (任务模板)         [1:N, 创建者]
   ├── task_instances (任务实例)         [1:N, 执行者]
-  └── emotion_records (情绪记录)        [1:N]
+  ├── emotion_records (情绪记录)        [1:N]
+  ├── device_bindings (设备绑定)        [1:N]
+  └── notifications (消息通知)          [1:N]
 
 task_templates (任务模板)
   └── template_steps (模板步骤)         [1:N]
@@ -693,31 +742,36 @@ task_instances (任务实例)
 comm_categories (沟通板分类)
   └── comm_phrases (常用语)            [1:N]
 
+emotion_alert_rules (情绪预警规则)
+  └── 关联 employee_profiles            [N:1]
+
 assist_sessions (远程协助会话)
   └── assist_messages (协助消息)       [1:N]
 ```
 
-### 核心表清单
+### 核心表清单（19 张表）
 
 | 序号 | 表名 | 说明 |
 |------|------|------|
-| 1 | users | 用户表（5种角色） |
-| 2 | employee_profiles | 员工档案 |
-| 3 | employee_counselor | 员工-辅导员关联 |
-| 4 | employee_parent | 员工-家长关联 |
-| 5 | task_templates | 任务模板 |
-| 6 | template_steps | 模板步骤 |
-| 7 | task_instances | 任务实例（排班执行） |
-| 8 | step_executions | 步骤执行记录 |
-| 9 | emotion_records | 情绪记录 |
-| 10 | emotion_alert_rules | 情绪预警规则 |
-| 11 | comm_categories | 沟通板分类 |
-| 12 | comm_phrases | 沟通常用语 |
-| 13 | notifications | 消息通知 |
-| 14 | assist_sessions | 远程协助会话 |
-| 15 | assist_messages | 远程协助消息 |
-| 16 | emergency_records | 应急记录 |
-| 17 | sync_queue | 离线同步队列 |
+| 1 | `users` | 用户表（5 种角色：counselor/co_counselor/parent/employee/employer） |
+| 2 | `employee_profiles` | 员工档案（残疾类型、支持等级、工作场所等） |
+| 3 | `employee_groups` | 员工分组（支持按组管理） |
+| 4 | `employee_counselor` | 员工-辅导员关联（支持主/协辅导员） |
+| 5 | `employee_parent` | 员工-家长关联（含审核状态） |
+| 6 | `task_templates` | 任务模板（含分类、封面、预估时间） |
+| 7 | `template_steps` | 模板步骤（含图片、音频、提示、预估时间） |
+| 8 | `task_instances` | 任务实例（排班执行记录） |
+| 9 | `step_executions` | 步骤执行记录（含耗时、尝试次数） |
+| 10 | `emotion_records` | 情绪记录（6 种情绪类型、强度 1-5） |
+| 11 | `emotion_alert_rules` | 情绪预警规则（连续天数、最低强度） |
+| 12 | `comm_categories` | 沟通板分类 |
+| 13 | `comm_phrases` | 沟通常用语（含图片、音频） |
+| 14 | `notifications` | 消息通知（7 种消息类型） |
+| 15 | `assist_sessions` | 远程协助会话（含评分） |
+| 16 | `assist_messages` | 远程协助消息（文本/图片/标注/语音） |
+| 17 | `emergency_records` | 应急记录 |
+| 18 | `sync_queue` | 离线同步队列 |
+| 19 | `device_bindings` | 设备绑定（绑定码激活机制） |
 
 完整建表语句见 `server/database/init.sql`。
 
@@ -742,8 +796,13 @@ cd server && npm install && npm run dev
 # 3. 启动辅导员端 Web
 cd counselor-web && npm install && npm run dev
 
-# 4. 启动员工端 APP
-cd employee-app && flutter pub get && flutter run
+# 4. 构建并部署员工端 Web
+cd employee-app && flutter pub get
+flutter build web --release --base-href "/employee-app/"
+cp -r build/web/* ../server/public/employee-app/
+
+# 5. （可选）启动员工端移动端
+flutter run
 ```
 
 ### 生产环境（国内云服务）
@@ -784,43 +843,48 @@ sudo npm install -g pm2
 
 # 安装 Nginx
 sudo apt-get install -y nginx
+
+# 安装 Flutter（仅构建员工端 Web 时需要）
+sudo snap install flutter --classic
 ```
 
 **2. 部署后端服务**
 
 ```bash
-# 上传代码到服务器
-git clone your-repo-url /opt/worknav
+git clone https://github.com/gongwenqing314/worknav.git /opt/worknav
 cd /opt/worknav/server
 
-# 安装依赖
 npm install --production
-
-# 配置环境变量
 cp .env.example .env
 vim .env  # 编辑生产环境配置
 
-# 初始化数据库
 mysql -h your-rds-host -u root -p worknav < database/init.sql
+mysql -h your-rds-host -u root -p worknav < migrations/seed.sql
 
-# 使用 PM2 启动
-pm2 start src/app.js --name worknav-server -i max
+pm2 start src/app.js --name worknav-server
 pm2 save
 pm2 startup
 ```
 
-**3. 部署辅导员端 Web**
+**3. 构建并部署员工端 Web**
+
+```bash
+cd /opt/worknav/employee-app
+flutter pub get
+flutter build web --release --base-href "/employee-app/"
+cp -r build/web/* ../server/public/employee-app/
+```
+
+**4. 构建并部署辅导员端 Web**
 
 ```bash
 cd /opt/worknav/counselor-web
 npm install
 npm run build
-
-# 将构建产物复制到 Nginx 目录
 sudo cp -r dist/* /var/www/worknav/web/
 ```
 
-**4. 配置 Nginx**
+**5. 配置 Nginx**
 
 ```nginx
 server {
@@ -830,47 +894,43 @@ server {
     ssl_certificate /etc/nginx/ssl/cert.pem;
     ssl_certificate_key /etc/nginx/ssl/key.pem;
 
-    # 前端
+    # 辅导员端 Web（主站）
     location / {
         root /var/www/worknav/web;
         try_files $uri $uri/ /index.html;
     }
 
-    # API
+    # API 反向代理
     location /api/ {
         proxy_pass http://127.0.0.1:3000;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     }
 
-    # WebSocket
+    # 员工端 Flutter Web（同源部署，由后端 Express 托管）
+    location /employee-app/ {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+    }
+
+    # WebSocket 代理
     location /socket.io/ {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
     }
 }
 ```
 
-**5. 域名与备案**
-
-- 在云服务商处购买域名
-- 完成 ICP 备案
-- 配置 DNS 解析到服务器 IP
-- 申请免费 SSL 证书（Let's Encrypt / 云服务商免费证书）
-
 #### 监控与运维
 
 ```bash
-# PM2 监控
-pm2 monit
-
-# 日志查看
-pm2 logs worknav-server
-
-# Nginx 日志
-tail -f /var/log/nginx/access.log
+pm2 monit          # PM2 进程监控
+pm2 logs worknav-server  # 查看日志
+tail -f /var/log/nginx/access.log  # Nginx 访问日志
 ```
 
 ---
@@ -899,14 +959,14 @@ tail -f /var/log/nginx/access.log
 
 #### 首次使用（辅导员引导）
 
-1. 辅导员在员工手机上安装 APP
+1. 辅导员在员工手机上安装 APP（或打开 Web 版 `https://your-domain.com/employee-app/`）
 2. 辅导员在 Web 端生成绑定码
-3. 员工打开 APP，输入绑定码完成激活
+3. 员工打开 APP，输入绑定码完成激活（Web 版自动设备登录）
 4. 辅导员引导员工熟悉界面（任务/沟通板/情绪按钮）
 
 #### 日常工作
 
-1. **上班**：打开 APP，查看今日任务列表
+1. **上班**：打开 APP，查看今日任务列表和统计面板
 2. **执行任务**：点击任务 → 查看步骤图片 → 完成操作 → 点击绿色大勾
 3. **需要帮助**：点击沟通板「我需要帮助」→ APP 自动语音播报
 4. **表达情绪**：点击情绪卡片 → 选择当前感受
@@ -917,10 +977,7 @@ tail -f /var/log/nginx/access.log
 
 1. 辅导员发送邀请链接
 2. 家长点击链接，注册账号并绑定孩子
-3. 登录后查看孩子的工作概况：
-   - 今日任务完成情况
-   - 情绪记录
-   - 预警通知
+3. 登录后查看孩子的工作概况：今日任务完成情况、情绪记录、预警通知
 4. 可配置通知接收方式（APP 推送 / 短信）
 
 ---
@@ -1000,6 +1057,7 @@ tail -f /var/log/nginx/access.log
 | 数据传输 | TLS 1.2+ 加密 |
 | 数据存储 | 敏感数据（手机号）加密存储 |
 | 身份认证 | JWT + Refresh Token 双 Token 机制 |
+| 设备登录 | 员工端 Web 通过设备 ID 自动登录，无需输入密码 |
 | 权限控制 | RBAC 五角色权限矩阵 |
 | 设备绑定 | 员工账号绑定设备，换机需辅导员授权 |
 | 接口鉴权 | 所有 API 基于角色权限校验 |
@@ -1018,6 +1076,10 @@ tail -f /var/log/nginx/access.log
 2. 辅导员在 Web 端「设备管理」页面生成 6 位绑定码（5 分钟有效）
 3. 员工在新设备上输入绑定码，完成激活
 4. 旧设备自动解绑
+
+### Q: 员工端 Web 版和移动端有什么区别？
+
+员工端 Web 版与移动端功能一致，采用 Flutter 同一套代码编译。Web 版通过同源部署在后端服务器上，无需安装 APP，适合在电脑或平板浏览器中使用。移动端支持离线模式和推送通知，Web 版暂不支持。
 
 ### Q: 语音播报没有声音怎么办？
 
