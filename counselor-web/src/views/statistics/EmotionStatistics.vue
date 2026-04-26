@@ -73,6 +73,14 @@ function renderPieChart() {
   if (!pieChartRef.value) return
   if (!pieChart) pieChart = echarts.init(pieChartRef.value)
   const keys = Object.keys(EMOTION_LABELS)
+  // 从情绪记录中统计分布
+  const counts = {}
+  for (const r of emotionRecords.value) {
+    if (r.emotion_type || r.emotion) {
+      const key = r.emotion_type || r.emotion
+      counts[key] = (counts[key] || 0) + 1
+    }
+  }
   pieChart.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c}次 ({d}%)' },
     legend: { orient: 'vertical', right: '5%', top: 'center' },
@@ -80,7 +88,7 @@ function renderPieChart() {
       type: 'pie', radius: ['35%', '65%'], center: ['35%', '50%'],
       data: keys.map(k => ({
         name: EMOTION_LABELS[k],
-        value: Math.floor(Math.random() * 30) + 5,
+        value: counts[k] || 0,
         itemStyle: { color: EMOTION_COLORS[k] }
       }))
     }]
@@ -96,11 +104,8 @@ async function fetchData() {
     })
     emotionRecords.value = res.data?.records || []
   } catch (error) {
-    emotionRecords.value = [
-      { employeeName: '王五', taskName: '物料搬运', emotion: 'anxious', duration: '35分钟', trigger: '遇到不熟悉的物品', recordedAt: '2025-01-15 10:30' },
-      { employeeName: '张三', taskName: '办公室清洁', emotion: 'happy', duration: '20分钟', trigger: '任务顺利完成', recordedAt: '2025-01-15 10:00' },
-      { employeeName: '赵六', taskName: '包装作业', emotion: 'calm', duration: '45分钟', trigger: '正常工作', recordedAt: '2025-01-15 09:30' }
-    ]
+    console.error('获取情绪统计数据失败:', error)
+    emotionRecords.value = []
   }
   renderPieChart()
 }

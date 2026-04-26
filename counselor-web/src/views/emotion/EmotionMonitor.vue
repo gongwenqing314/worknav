@@ -100,7 +100,7 @@ import { getEmotionOverview, getEmotionAlerts, handleAlert as handleAlertApi } f
 import { EMOTION_LABELS, EMOTION_COLORS } from '@/utils/constants'
 
 const loading = ref(false)
-const alertFilter = ref('')
+const alertFilter = ref('unhandled')
 
 // 情绪概览
 const emotionOverview = reactive({

@@ -30,13 +30,12 @@
             size="large"
             @submit.prevent="handleLogin"
           >
-            <!-- 手机号 -->
-            <el-form-item prop="phone">
+            <!-- 用户名 -->
+            <el-form-item prop="username">
               <el-input
-                v-model="loginForm.phone"
-                placeholder="请输入手机号"
-                :prefix-icon="Iphone"
-                maxlength="11"
+                v-model="loginForm.username"
+                placeholder="请输入用户名"
+                :prefix-icon="User"
               />
             </el-form-item>
 
@@ -104,10 +103,10 @@
 import { ref, reactive } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Iphone, Lock, Message, Location } from '@element-plus/icons-vue'
+import { User, Lock, Message, Location } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { sendSmsCode } from '@/api/auth'
-import { phoneRule, smsCodeRule, requiredRule } from '@/utils/validators'
+import { requiredRule, smsCodeRule } from '@/utils/validators'
 
 const router = useRouter()
 const route = useRoute()
@@ -124,14 +123,14 @@ const loginFormRef = ref(null)
 
 // 登录表单数据
 const loginForm = reactive({
-  phone: '',
+  username: '',
   password: '',
   code: ''
 })
 
 // 表单校验规则
 const loginRules = {
-  phone: [phoneRule],
+  username: [requiredRule('用户名')],
   password: [requiredRule('密码')],
   code: [smsCodeRule]
 }
@@ -140,15 +139,15 @@ const loginRules = {
  * 发送验证码
  */
 async function handleSendSms() {
-  // 先校验手机号
+  // 先校验用户名
   try {
-    await loginFormRef.value.validateField('phone')
+    await loginFormRef.value.validateField('username')
   } catch {
     return
   }
 
   try {
-    await sendSmsCode(loginForm.phone)
+    await sendSmsCode(loginForm.username)
     ElMessage.success('验证码已发送')
     // 开始倒计时 60 秒
     smsCooldown.value = 60
@@ -177,12 +176,12 @@ async function handleLogin() {
   try {
     if (loginType.value === 'password') {
       await authStore.loginByPasswordAction({
-        phone: loginForm.phone,
+        username: loginForm.username,
         password: loginForm.password
       })
     } else {
       await authStore.loginBySmsAction({
-        phone: loginForm.phone,
+        username: loginForm.username,
         code: loginForm.code
       })
     }

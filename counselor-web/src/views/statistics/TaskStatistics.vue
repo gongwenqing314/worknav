@@ -92,19 +92,14 @@ let trendChart = null
 let statusChart = null
 
 const stats = reactive({
-  totalTasks: 156,
-  completionRate: 85,
-  completionTrend: 5,
-  avgDuration: '25分钟',
-  stuckCount: 12
+  totalTasks: 0,
+  completionRate: 0,
+  completionTrend: 0,
+  avgDuration: '0分钟',
+  stuckCount: 0
 })
 
-const employeeRanking = ref([
-  { name: '张三', totalTasks: 30, completedTasks: 28, completionRate: 93, avgDuration: '20分钟' },
-  { name: '李四', totalTasks: 28, completedTasks: 25, completionRate: 89, avgDuration: '22分钟' },
-  { name: '赵六', totalTasks: 25, completedTasks: 21, completionRate: 84, avgDuration: '28分钟' },
-  { name: '王五', totalTasks: 22, completedTasks: 18, completionRate: 82, avgDuration: '30分钟' }
-])
+const employeeRanking = ref([])
 
 function initCharts() {
   if (trendChartRef.value) trendChart = echarts.init(trendChartRef.value)
@@ -117,7 +112,7 @@ function renderTrendChart() {
   const data = []
   for (let i = 29; i >= 0; i--) {
     dates.push(dayjs().subtract(i, 'day').format('MM-DD'))
-    data.push(Math.floor(Math.random() * 30) + 60)
+    data.push(0) // 后端暂无逐日趋势数据，用 0 占位
   }
   trendChart.setOption({
     tooltip: { trigger: 'axis' },
@@ -128,7 +123,7 @@ function renderTrendChart() {
   }, true)
 }
 
-function renderStatusChart() {
+function renderStatusChart(completed = 0, inProgress = 0, pending = 0) {
   if (!statusChart) return
   statusChart.setOption({
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
@@ -136,9 +131,9 @@ function renderStatusChart() {
     series: [{
       type: 'pie', radius: ['35%', '65%'], center: ['50%', '45%'],
       data: [
-        { value: 85, name: '已完成', itemStyle: { color: '#67C23A' } },
-        { value: 10, name: '执行中', itemStyle: { color: '#409EFF' } },
-        { value: 5, name: '未完成', itemStyle: { color: '#F56C6C' } }
+        { value: completed, name: '已完成', itemStyle: { color: '#67C23A' } },
+        { value: inProgress, name: '执行中', itemStyle: { color: '#409EFF' } },
+        { value: pending, name: '未完成', itemStyle: { color: '#F56C6C' } }
       ]
     }]
   }, true)
@@ -147,16 +142,31 @@ function renderStatusChart() {
 async function fetchData() {
   chartLoading.value = true
   try {
-    await getTaskCompletionTrend({
-      startDate: dateRange.value?.[0],
-      endDate: dateRange.value?.[1]
-    })
+    // 获取任务完成率统计
+    const res = await getTaskCompletionTrend({ range: 'month' })
+    const data = res.data || {}
+
+    // 更新概览卡片
+    stats.totalTasks = data.total || 0
+    stats.completionRate = data.completionRate || 0
+    stats.stuckCount = data.byStatus?.['in_progress'] || 0
+
+    // 更新饼图数据
+    const byStatus = data.byStatus || {}
+    renderStatusChart(
+      byStatus['completed'] || 0,
+      byStatus['in_progress'] || 0,
+      (byStatus['assigned'] || 0) + (byStatus['pending'] || 0)
+    )
+
+    // 趋势图暂用 0 占位（后端暂无逐日数据）
+    renderTrendChart()
   } catch (error) {
     console.error('获取统计数据失败:', error)
+    renderTrendChart()
+    renderStatusChart(0, 0, 0)
   } finally {
     chartLoading.value = false
-    renderTrendChart()
-    renderStatusChart()
   }
 }
 

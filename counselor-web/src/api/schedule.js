@@ -60,3 +60,11 @@ export function getScheduleByDate(date) {
 export function getScheduleStats(params) {
   return request.get('/schedules/stats', { params })
 }
+
+/**
+ * 获取一周排班概览
+ * @param {string} startDate - 起始日期 YYYY-MM-DD
+ */
+export function getScheduleWeek(startDate) {
+  return request.get('/schedules/week', { params: { startDate } })
+}

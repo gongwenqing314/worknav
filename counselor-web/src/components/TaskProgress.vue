@@ -31,15 +31,15 @@
         class="progress-step"
         :class="{
           'progress-step--completed': step.status === 'completed',
-          'progress-step--current': step.status === 'current',
-          'progress-step--pending': step.status === 'pending',
+          'progress-step--current': step.status === 'current' || step.status === 'in_progress',
+          'progress-step--pending': step.status === 'pending' || step.status === 'assigned',
           'progress-step--key': step.isKey
         }"
       >
         <!-- 步骤指示器 -->
         <div class="step-indicator">
           <el-icon v-if="step.status === 'completed'" :size="16"><Check /></el-icon>
-          <span v-else-if="step.status === 'current'" class="step-indicator__dot"></span>
+          <span v-else-if="step.status === 'current' || step.status === 'in_progress'" class="step-indicator__dot"></span>
           <span v-else class="step-indicator__num">{{ index + 1 }}</span>
         </div>
 
@@ -55,7 +55,7 @@
           <div v-if="step.duration" class="step-content__duration">
             耗时 {{ step.duration }}
           </div>
-          <div v-if="step.status === 'current' && step.startedAt" class="step-content__timer">
+          <div v-if="step.status === 'current' || step.status === 'in_progress'" class="step-content__timer">
             进行中 {{ elapsedTime }}
           </div>
         </div>

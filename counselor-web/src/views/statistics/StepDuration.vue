@@ -119,13 +119,8 @@ async function fetchData() {
     })
     stuckSteps.value = res.data || []
   } catch (error) {
-    stuckSteps.value = [
-      { stepTitle: '擦拭设备', taskName: '办公室清洁', execCount: 45, avgDuration: 300, maxDuration: 900, stuckIndex: 85 },
-      { stepTitle: '分类文件', taskName: '文件整理', execCount: 38, avgDuration: 240, maxDuration: 600, stuckIndex: 72 },
-      { stepTitle: '清洁桌面', taskName: '办公室清洁', execCount: 42, avgDuration: 180, maxDuration: 480, stuckIndex: 65 },
-      { stepTitle: '包装封箱', taskName: '包装作业', execCount: 30, avgDuration: 150, maxDuration: 360, stuckIndex: 48 },
-      { stepTitle: '准备工作台', taskName: '办公室清洁', execCount: 50, avgDuration: 45, maxDuration: 120, stuckIndex: 20 }
-    ]
+    console.error('获取步骤耗时数据失败:', error)
+    stuckSteps.value = []
   } finally {
     loading.value = false
     renderChart()

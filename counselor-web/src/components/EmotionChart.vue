@@ -29,6 +29,7 @@
 import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import * as echarts from 'echarts'
 import { EMOTION_LABELS, EMOTION_COLORS } from '@/utils/constants'
+import { getEmotionTrend } from '@/api/emotion'
 import dayjs from 'dayjs'
 
 const props = defineProps({
@@ -69,19 +70,26 @@ function initChart() {
 }
 
 /**
- * 获取模拟数据（实际项目中替换为 API 调用）
+ * 获取情绪数据
  */
 async function fetchData() {
   loading.value = true
   try {
-    // 模拟数据 - 实际使用时替换为 API 调用
-    // const res = await getEmotionTrend(props.employeeId, { timeRange: timeRange.value })
-    await new Promise(resolve => setTimeout(resolve, 500))
+    const res = await getEmotionTrend(props.employeeId, { days: timeRange.value })
+    const trendData = res.data || []
 
     if (chartType.value === 'trend') {
-      renderTrendChart()
+      renderTrendChart(trendData)
     } else {
-      renderDistributionChart()
+      renderDistributionChart(trendData)
+    }
+  } catch (error) {
+    console.error('获取情绪数据失败:', error)
+    // API 失败时渲染空图表
+    if (chartType.value === 'trend') {
+      renderTrendChart([])
+    } else {
+      renderDistributionChart([])
     }
   } finally {
     loading.value = false
@@ -91,23 +99,13 @@ async function fetchData() {
 /**
  * 渲染趋势图
  */
-function renderTrendChart() {
+function renderTrendChart(trendData = []) {
   if (!chartInstance) return
 
-  // 生成模拟日期数据
-  const days = parseInt(timeRange.value)
-  const dates = []
-  const happyData = []
-  const calmData = []
-  const anxiousData = []
-
-  for (let i = days - 1; i >= 0; i--) {
-    const date = dayjs().subtract(i, 'day').format('MM-DD')
-    dates.push(date)
-    happyData.push(Math.floor(Math.random() * 5) + 2)
-    calmData.push(Math.floor(Math.random() * 4) + 3)
-    anxiousData.push(Math.floor(Math.random() * 3))
-  }
+  const dates = trendData.map(d => d.date || d.recorded_at?.slice(5, 10) || '')
+  const happyData = trendData.map(d => d.happy || d.happy_count || 0)
+  const calmData = trendData.map(d => d.calm || d.calm_count || 0)
+  const anxiousData = trendData.map(d => d.anxious || d.anxious_count || 0)
 
   const option = {
     tooltip: {
@@ -169,13 +167,22 @@ function renderTrendChart() {
 /**
  * 渲染分布饼图
  */
-function renderDistributionChart() {
+function renderDistributionChart(trendData = []) {
   if (!chartInstance) return
 
-  const emotionKeys = Object.keys(EMOTION_LABELS)
-  const pieData = emotionKeys.map(key => ({
+  // 从趋势数据中汇总各情绪出现次数
+  const emotionCounts = {}
+  for (const d of trendData) {
+    for (const key of Object.keys(EMOTION_LABELS)) {
+      if (d[key] || d[key + '_count']) {
+        emotionCounts[key] = (emotionCounts[key] || 0) + (d[key] || d[key + '_count'] || 0)
+      }
+    }
+  }
+
+  const pieData = Object.keys(EMOTION_LABELS).map(key => ({
     name: EMOTION_LABELS[key],
-    value: Math.floor(Math.random() * 20) + 5,
+    value: emotionCounts[key] || 0,
     itemStyle: { color: EMOTION_COLORS[key] }
   }))
 

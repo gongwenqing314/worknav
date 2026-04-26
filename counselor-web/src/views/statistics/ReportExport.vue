@@ -86,10 +86,7 @@ import dayjs from 'dayjs'
 
 const exporting = ref(false)
 const employeeOptions = ref([])
-const historyList = ref([
-  { id: '1', reportName: '1月份任务完成报表', type: '任务完成', format: 'xlsx', dateRange: '2025-01-01 ~ 2025-01-31', createdAt: '2025-02-01 09:00' },
-  { id: '2', reportName: '12月份情绪统计报表', type: '情绪统计', format: 'pdf', dateRange: '2024-12-01 ~ 2024-12-31', createdAt: '2025-01-02 10:30' }
-])
+const historyList = ref([])
 
 const exportForm = reactive({
   type: 'task_completion',

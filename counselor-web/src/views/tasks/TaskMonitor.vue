@@ -93,24 +93,54 @@ const loading = ref(false)
 const executionList = ref([])
 let refreshTimer = null
 
-// 步骤耗时数据
-const stepDurationData = ref([
-  { stepTitle: '准备工作台', avgDuration: 45, maxDuration: 120, stuckIndex: 20 },
-  { stepTitle: '清洁桌面', avgDuration: 180, maxDuration: 600, stuckIndex: 65 },
-  { stepTitle: '擦拭设备', avgDuration: 300, maxDuration: 900, stuckIndex: 85 },
-  { stepTitle: '整理文件', avgDuration: 120, maxDuration: 300, stuckIndex: 35 },
-  { stepTitle: '垃圾处理', avgDuration: 60, maxDuration: 180, stuckIndex: 15 }
-])
+// 步骤耗时数据（从执行记录动态计算）
+const stepDurationData = ref([])
 
 // 统计
 const completedCount = computed(() => executionList.value.filter(e => e.status === 'completed').length)
 const inProgressCount = computed(() => executionList.value.filter(e => e.status === 'in_progress').length)
-const pendingCount = computed(() => executionList.value.filter(e => e.status === 'pending').length)
+const pendingCount = computed(() => executionList.value.filter(e => e.status === 'assigned' || e.status === 'pending').length)
 
 function getStuckColor(index) {
   if (index > 70) return '#F56C6C'
   if (index > 40) return '#E6A23C'
   return '#67C23A'
+}
+
+/**
+ * 根据执行记录动态计算步骤耗时分析
+ */
+function calculateStepDuration(executions) {
+  // 收集所有已完成的步骤耗时，按步骤标题分组
+  const stepMap = {}
+  for (const exec of executions) {
+    for (const step of exec.steps) {
+      if (step.status !== 'completed' || !step.duration) continue
+      const title = step.title
+      const seconds = parseInt(step.duration) || 0
+      if (!stepMap[title]) {
+        stepMap[title] = { durations: [], maxDuration: 0 }
+      }
+      stepMap[title].durations.push(seconds)
+      if (seconds > stepMap[title].maxDuration) {
+        stepMap[title].maxDuration = seconds
+      }
+    }
+  }
+
+  // 计算每个步骤的平均耗时和卡顿指数
+  const result = []
+  for (const [title, data] of Object.entries(stepMap)) {
+    const avgDuration = Math.round(data.durations.reduce((a, b) => a + b, 0) / data.durations.length)
+    // 卡顿指数：基于预估时间和实际耗时的比率，预估时间取模板中的 estimated_seconds
+    // 简化处理：以最大耗时为基准，超过60秒认为有卡顿风险
+    const stuckIndex = Math.min(100, Math.round((avgDuration / Math.max(data.maxDuration, 1)) * 50 + (avgDuration > 60 ? 30 : 0)))
+    result.push({ stepTitle: title, avgDuration, maxDuration: data.maxDuration, stuckIndex })
+  }
+
+  // 按卡顿指数降序排列
+  result.sort((a, b) => b.stuckIndex - a.stuckIndex)
+  return result
 }
 
 async function refreshData() {
@@ -123,30 +153,11 @@ async function refreshData() {
     // 获取执行记录
     const execRes = await getTaskExecutions(taskId, {})
     executionList.value = execRes.data || []
+
+    // 动态计算步骤耗时分析
+    stepDurationData.value = calculateStepDuration(executionList.value)
   } catch (error) {
     console.error('获取监控数据失败:', error)
-    // 使用模拟数据
-    taskName.value = '办公室清洁'
-    executionList.value = [
-      {
-        employeeId: '1', employeeName: '张三', status: 'in_progress', startTime: '09:30',
-        steps: [
-          { id: '1', title: '准备工作台', status: 'completed', duration: '45秒' },
-          { id: '2', title: '清洁桌面', status: 'completed', duration: '3分钟' },
-          { id: '3', title: '擦拭设备', status: 'current', startedAt: true },
-          { id: '4', title: '整理文件', status: 'pending' }
-        ]
-      },
-      {
-        employeeId: '2', employeeName: '李四', status: 'completed', startTime: '09:00',
-        steps: [
-          { id: '1', title: '准备工作台', status: 'completed', duration: '30秒' },
-          { id: '2', title: '清洁桌面', status: 'completed', duration: '2分钟' },
-          { id: '3', title: '擦拭设备', status: 'completed', duration: '4分钟' },
-          { id: '4', title: '整理文件', status: 'completed', duration: '1分钟' }
-        ]
-      }
-    ]
   } finally {
     loading.value = false
   }

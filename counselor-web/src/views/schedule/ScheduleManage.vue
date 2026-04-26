@@ -82,12 +82,31 @@
               </el-select>
             </el-form-item>
             <el-form-item label="任务">
-              <el-select v-model="quickForm.taskId" placeholder="选择任务" style="width: 100%">
+              <el-select v-model="quickForm.templateId" placeholder="选择任务模板" style="width: 100%">
                 <el-option v-for="task in taskOptions" :key="task.id" :label="task.title" :value="task.id" />
               </el-select>
             </el-form-item>
             <el-form-item label="时间">
-              <el-time-picker v-model="quickForm.timeRange" is-range range-separator="至" start-placeholder="开始" end-placeholder="结束" style="width: 100%" />
+              <div style="display: flex; gap: 8px; width: 100%">
+                <el-time-select
+                  v-model="quickForm.startTime"
+                  start="06:00"
+                  step="00:30"
+                  end="22:00"
+                  placeholder="开始时间"
+                  style="flex: 1"
+                />
+                <span style="line-height: 32px; color: #909399">至</span>
+                <el-time-select
+                  v-model="quickForm.endTime"
+                  start="06:00"
+                  step="00:30"
+                  end="22:00"
+                  placeholder="结束时间"
+                  :min-time="quickForm.startTime"
+                  style="flex: 1"
+                />
+              </div>
             </el-form-item>
             <el-form-item>
               <el-button type="primary" @click="handleQuickAdd">添加</el-button>
@@ -106,7 +125,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="选择任务">
-          <el-select v-model="batchForm.taskId" placeholder="选择任务" style="width: 100%">
+          <el-select v-model="batchForm.templateId" placeholder="选择任务模板" style="width: 100%">
             <el-option v-for="task in taskOptions" :key="task.id" :label="task.title" :value="task.id" />
           </el-select>
         </el-form-item>
@@ -114,7 +133,26 @@
           <el-date-picker v-model="batchForm.dateRange" type="daterange" range-separator="至" start-placeholder="开始日期" end-placeholder="结束日期" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
         <el-form-item label="时间段">
-          <el-time-picker v-model="batchForm.timeRange" is-range range-separator="至" start-placeholder="开始" end-placeholder="结束" style="width: 100%" />
+          <div style="display: flex; gap: 8px; width: 100%">
+            <el-time-select
+              v-model="batchForm.startTime"
+              start="06:00"
+              step="00:30"
+              end="22:00"
+              placeholder="开始时间"
+              style="flex: 1"
+            />
+            <span style="line-height: 32px; color: #909399">至</span>
+            <el-time-select
+              v-model="batchForm.endTime"
+              start="06:00"
+              step="00:30"
+              end="22:00"
+              placeholder="结束时间"
+              :min-time="batchForm.startTime"
+              style="flex: 1"
+            />
+          </div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -135,9 +173,10 @@ import { ElMessage } from 'element-plus'
 import { Plus, ArrowLeft, ArrowRight } from '@element-plus/icons-vue'
 import PageHeader from '@/components/PageHeader.vue'
 import dayjs from 'dayjs'
-import { getScheduleCalendar, createSchedule, batchCreateSchedules, deleteSchedule } from '@/api/schedule'
+import { getScheduleCalendar, batchCreateSchedules, deleteSchedule } from '@/api/schedule'
 import { getEmployeeList } from '@/api/user'
-import { getTaskList } from '@/api/task'
+import { getTemplateList } from '@/api/task'
+import { getScheduleWeek } from '@/api/schedule'
 
 const weekdays = ['一', '二', '三', '四', '五', '六', '日']
 const currentDate = ref(dayjs())
@@ -153,27 +192,30 @@ const batchLoading = ref(false)
 const currentMonth = computed(() => currentDate.value.format('YYYY年MM月'))
 const selectedDateLabel = computed(() => selectedDate.value)
 
-const quickForm = reactive({ employeeId: '', taskId: '', timeRange: null })
-const batchForm = reactive({ employeeIds: [], taskId: '', dateRange: null, timeRange: null })
+const quickForm = reactive({ employeeId: '', templateId: '', startTime: '', endTime: '' })
+const batchForm = reactive({ employeeIds: [], templateId: '', dateRange: null, startTime: '', endTime: '' })
 
 function isSelected(date) {
   return date === selectedDate.value
 }
 
+// 缓存排班数据：key=日期, value=[{label, type}]
+const scheduleMap = ref({})
+
 function prevMonth() {
   currentDate.value = currentDate.value.subtract(1, 'month')
-  generateCalendar()
+  loadCalendarData()
 }
 
 function nextMonth() {
   currentDate.value = currentDate.value.add(1, 'month')
-  generateCalendar()
+  loadCalendarData()
 }
 
 function goToday() {
   currentDate.value = dayjs()
   selectedDate.value = dayjs().format('YYYY-MM-DD')
-  generateCalendar()
+  loadCalendarData()
   fetchDaySchedules()
 }
 
@@ -183,39 +225,76 @@ function selectDate(date) {
   fetchDaySchedules()
 }
 
+/**
+ * 生成日历格子（纯日期计算，不涉及网络请求）
+ */
 function generateCalendar() {
   const start = currentDate.value.startOf('month').startOf('week').add(1, 'day')
   const end = currentDate.value.endOf('month').endOf('week').add(1, 'day')
   const days = []
   let cursor = start
   while (cursor.isBefore(end) || cursor.isSame(end, 'day')) {
+    const dateStr = cursor.format('YYYY-MM-DD')
     days.push({
       day: cursor.date(),
-      date: cursor.format('YYYY-MM-DD'),
+      date: dateStr,
       isCurrentMonth: cursor.month() === currentDate.value.month(),
       isToday: cursor.isSame(dayjs(), 'day'),
-      tasks: generateMockTasks(cursor)
+      tasks: scheduleMap.value[dateStr] || []
     })
     cursor = cursor.add(1, 'day')
   }
   calendarDays.value = days
 }
 
-function generateMockTasks(date) {
-  const day = date.day()
-  if (day === 0 || day === 6) return []
-  const tasks = []
-  if (day % 3 === 0) tasks.push({ label: '清洁', type: 'success' })
-  if (day % 2 === 0) tasks.push({ label: '整理', type: 'primary' })
-  if (day % 5 === 0) tasks.push({ label: '搬运', type: 'warning' })
-  return tasks
+/**
+ * 从后端加载当月排班数据，按周批量请求
+ */
+async function loadCalendarData() {
+  // 计算日历显示范围的起止日期
+  const start = currentDate.value.startOf('month').startOf('week').add(1, 'day')
+  const end = currentDate.value.endOf('month').endOf('week').add(1, 'day')
+
+  // 按周批量请求
+  const newMap = {}
+  let cursor = start
+  while (cursor.isBefore(end) || cursor.isSame(end, 'day')) {
+    try {
+      const res = await getScheduleWeek(cursor.format('YYYY-MM-DD'))
+      const schedule = res.data?.schedule || {}
+      for (const [date, tasks] of Object.entries(schedule)) {
+        if (tasks.length > 0) {
+          // 每个任务取模板标题的前2个字作为标签
+          newMap[date] = tasks.slice(0, 3).map(t => ({
+            label: (t.template_title || t.title || '任务').slice(0, 4),
+            type: ['success', 'primary', 'warning'][Math.floor(Math.random() * 3)]
+          }))
+        }
+      }
+    } catch {
+      // 单周请求失败不影响其他周
+    }
+    cursor = cursor.add(7, 'day')
+  }
+
+  scheduleMap.value = newMap
+  generateCalendar()
 }
 
 async function fetchDaySchedules() {
   detailLoading.value = true
   try {
     const res = await getScheduleCalendar({ date: selectedDate.value })
-    daySchedules.value = Array.isArray(res.data) ? res.data : (res.data?.list || res.data?.schedules || [])
+    // 后端返回 { data: { date, tasks: [...] } }
+    const rawList = res.data?.tasks || res.data?.list || res.data?.schedules || (Array.isArray(res.data) ? res.data : [])
+    // 字段映射：后端下划线命名 → 前端驼峰命名
+    daySchedules.value = rawList.map(item => ({
+      id: item.id,
+      employeeName: item.employee_name || item.employeeName || '',
+      taskName: item.template_title || item.taskName || '',
+      timeRange: item.scheduled_time || item.timeRange || '',
+      status: item.status,
+    }))
   } catch (error) {
     console.error('获取排班失败:', error)
     daySchedules.value = []
@@ -228,10 +307,12 @@ async function fetchOptions() {
   try {
     const [empRes, taskRes] = await Promise.allSettled([
       getEmployeeList({ page: 1, pageSize: 100, status: 'active' }),
-      getTaskList({ page: 1, pageSize: 100, status: 'pending' })
+      getTemplateList({ page: 1, pageSize: 100 })
     ])
     employeeOptions.value = empRes.status === 'fulfilled' ? (empRes.value.data?.list || []) : []
-    taskOptions.value = taskRes.status === 'fulfilled' ? (taskRes.value.data?.list || []) : []
+    // 从模板列表构建任务选项（模板字段名为 name）
+    const list = taskRes.status === 'fulfilled' ? (taskRes.value.data?.list || []) : []
+    taskOptions.value = list.map(t => ({ id: t.id, title: t.name || t.title }))
   } catch (error) {
     console.error('获取选项失败:', error)
     employeeOptions.value = []
@@ -241,26 +322,29 @@ async function fetchOptions() {
 
 function showBatchDialog() {
   batchForm.employeeIds = []
-  batchForm.taskId = ''
+  batchForm.templateId = ''
   batchForm.dateRange = null
-  batchForm.timeRange = null
+  batchForm.startTime = ''
+  batchForm.endTime = ''
   batchDialogVisible.value = true
 }
 
 async function handleQuickAdd() {
-  if (!quickForm.employeeId || !quickForm.taskId) {
-    ElMessage.warning('请选择员工和任务')
+  if (!quickForm.employeeId || !quickForm.templateId) {
+    ElMessage.warning('请选择员工和任务模板')
     return
   }
   try {
-    await createSchedule({
-      employeeId: quickForm.employeeId,
-      taskId: quickForm.taskId,
-      date: selectedDate.value,
-      startTime: quickForm.timeRange?.[0] || '09:00',
-      endTime: quickForm.timeRange?.[1] || '17:00'
+    await batchCreateSchedules({
+      schedules: [{
+        templateId: quickForm.templateId,
+        employeeId: quickForm.employeeId,
+        scheduledDate: selectedDate.value,
+        scheduledTime: quickForm.startTime || '09:00'
+      }]
     })
     ElMessage.success('排班添加成功')
+    loadCalendarData()
     fetchDaySchedules()
   } catch (error) {
     console.error('添加排班失败:', error)
@@ -268,34 +352,33 @@ async function handleQuickAdd() {
 }
 
 async function handleBatchCreate() {
-  if (!batchForm.employeeIds.length || !batchForm.taskId || !batchForm.dateRange) {
+  if (!batchForm.employeeIds.length || !batchForm.templateId || !batchForm.dateRange) {
     ElMessage.warning('请填写完整信息')
     return
   }
   batchLoading.value = true
   try {
-    const items = []
+    const schedules = []
     const start = dayjs(batchForm.dateRange[0])
     const end = dayjs(batchForm.dateRange[1])
     let cursor = start
     while (cursor.isBefore(end) || cursor.isSame(end, 'day')) {
       if (cursor.day() !== 0 && cursor.day() !== 6) {
         batchForm.employeeIds.forEach(empId => {
-          items.push({
+          schedules.push({
+            templateId: batchForm.templateId,
             employeeId: empId,
-            taskId: batchForm.taskId,
-            date: cursor.format('YYYY-MM-DD'),
-            startTime: batchForm.timeRange?.[0] || '09:00',
-            endTime: batchForm.timeRange?.[1] || '17:00'
+            scheduledDate: cursor.format('YYYY-MM-DD'),
+            scheduledTime: batchForm.startTime || '09:00'
           })
         })
       }
       cursor = cursor.add(1, 'day')
     }
-    await batchCreateSchedules({ items })
+    await batchCreateSchedules({ schedules })
     ElMessage.success('批量排班成功')
     batchDialogVisible.value = false
-    generateCalendar()
+    loadCalendarData()
     fetchDaySchedules()
   } catch (error) {
     console.error('批量排班失败:', error)
@@ -315,7 +398,7 @@ async function handleDeleteSchedule(row) {
 }
 
 onMounted(() => {
-  generateCalendar()
+  loadCalendarData()
   fetchDaySchedules()
   fetchOptions()
 })

@@ -45,6 +45,16 @@ export const useNotificationStore = defineStore('notification', {
       this.listLoading = true
       try {
         const queryParams = { ...this.queryParams, ...params }
+        // 前端 read: 'unread'/'read' → 后端 isRead: 0/1
+        if (queryParams.read === 'unread') {
+          queryParams.isRead = 0
+          delete queryParams.read
+        } else if (queryParams.read === 'read') {
+          queryParams.isRead = 1
+          delete queryParams.read
+        } else {
+          delete queryParams.read
+        }
         const res = await getNotifications(queryParams)
         this.notifications = res.data?.list || res.data || []
         this.total = res.data?.total || 0

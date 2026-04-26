@@ -5,16 +5,16 @@
 import request from './request'
 
 /**
- * 手机号 + 密码登录
- * @param {Object} data - { phone, password }
+ * 用户名 + 密码登录
+ * @param {Object} data - { username, password }
  */
 export function loginByPassword(data) {
   return request.post('/auth/login', data)
 }
 
 /**
- * 手机号 + 验证码登录
- * @param {Object} data - { phone, code }
+ * 用户名 + 验证码登录
+ * @param {Object} data - { username, code }
  */
 export function loginBySms(data) {
   return request.post('/auth/login/sms', data)
@@ -22,10 +22,10 @@ export function loginBySms(data) {
 
 /**
  * 发送登录验证码
- * @param {string} phone - 手机号
+ * @param {string} username - 用户名
  */
-export function sendSmsCode(phone) {
-  return request.post('/auth/sms-code', { phone })
+export function sendSmsCode(username) {
+  return request.post('/auth/sms-code', { username })
 }
 
 /**

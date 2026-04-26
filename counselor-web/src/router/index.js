@@ -106,7 +106,7 @@ const routes = [
         path: 'emotion',
         name: 'EmotionMonitor',
         component: () => import('@/views/emotion/EmotionMonitor.vue'),
-        meta: { title: '情绪监控', icon: 'Sunny', requiredRole: 'assistant' }
+        meta: { title: '情绪监控', icon: 'Sunny', requiredRole: 'counselor' }
       },
       {
         path: 'emotion/alert-rules',
