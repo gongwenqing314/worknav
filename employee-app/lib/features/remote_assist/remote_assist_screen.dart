@@ -2,13 +2,14 @@
 /// 拍照发送求助，接收管理员标注图+语音回复
 library;
 
-import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
 import '../../../core/constants/app_dimensions.dart';
 import '../../../core/utils/audio_player.dart';
 import '../../../core/utils/vibration_util.dart';
+import 'widgets/photo_capture_button.dart';
 
 /// 远程协助页面
 /// 员工可以拍照发送给管理员请求远程指导
@@ -316,15 +317,24 @@ class _RemoteAssistScreenState extends State<RemoteAssistScreen> {
 
   /// 构建照片预览
   Widget _buildPhotoPreview() {
-    if (_photoPath != null && File(_photoPath!).existsSync()) {
-      return Image.file(
-        File(_photoPath!),
-        fit: BoxFit.cover,
-        width: double.infinity,
+    // Web 平台不支持 dart:io File，使用模拟预览
+    if (kIsWeb || _photoPath == null) {
+      return Container(
+        color: AppColors.surfaceVariant,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.photo_camera, size: 48, color: AppColors.textHint),
+              SizedBox(height: 8),
+              Text('照片预览', style: AppTextStyles.bodySmall),
+            ],
+          ),
+        ),
       );
     }
 
-    // 模拟照片预览
+    // 非 Web 平台：显示文件图片
     return Container(
       color: AppColors.surfaceVariant,
       child: const Center(

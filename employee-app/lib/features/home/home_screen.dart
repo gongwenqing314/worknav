@@ -13,6 +13,8 @@ import '../remote_assist/remote_assist_screen.dart';
 import '../settings/settings_screen.dart';
 import 'home_controller.dart';
 import 'widgets/task_card.dart';
+import '../../shared/services/task_service.dart';
+import '../../shared/services/auth_service.dart';
 import 'widgets/greeting_bar.dart';
 import '../../shared/widgets/loading_indicator.dart';
 
@@ -33,14 +35,24 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _controller = HomeController();
     _pageController = PageController();
 
-    // 加载任务数据
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controller.loadTasks();
-    });
+    // 加载任务数据（在 build 中初始化 controller）
   }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_controllerInitialized) {
+      _controllerInitialized = true;
+      final taskService = context.read<TaskService>();
+      final authService = context.read<AuthService>();
+      _controller = HomeController(taskService, authService);
+      _controller.loadTasks();
+    }
+  }
+
+  bool _controllerInitialized = false;
 
   @override
   void dispose() {

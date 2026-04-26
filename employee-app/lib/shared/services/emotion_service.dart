@@ -3,10 +3,12 @@
 library;
 
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
+import '../../core/utils/storage_util.dart';
 import '../models/emotion_record.dart';
 
 /// 情绪服务
@@ -17,6 +19,55 @@ class EmotionService {
 
   /// 缓存键
   static const String _cacheKeyTodayEmotions = 'cache_today_emotions';
+
+  /// Web 平台 HTTP GET 请求辅助方法
+  Future<Map<String, dynamic>?> _webGet(String path) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try { token = (jsonDecode(rawToken) as String); } catch (_) { token = rawToken; }
+    }
+    final request = html.HttpRequest();
+    request.open('GET', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send();
+    await request.onLoad.first;
+    if (request.status == 200) {
+      return jsonDecode(request.responseText!) as Map<String, dynamic>;
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
+  }
+
+  /// Web 平台 HTTP POST 请求辅助方法
+  Future<Map<String, dynamic>?> _webPost(String path, {dynamic data}) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try { token = (jsonDecode(rawToken) as String); } catch (_) { token = rawToken; }
+    }
+    final request = html.HttpRequest();
+    request.open('POST', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send(jsonEncode(data));
+    await request.onLoad.first;
+    if (request.status == 200 || request.status == 201) {
+      if (request.responseText != null && request.responseText!.isNotEmpty) {
+        return jsonDecode(request.responseText!) as Map<String, dynamic>;
+      }
+      return {};
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
+  }
 
   /// 提交情绪记录
   /// [emotionType] 情绪类型
@@ -34,12 +85,17 @@ class EmotionService {
     );
 
     try {
-      final response = await _dioClient.post(
-        ApiConstants.submitEmotion,
-        data: record.toJson(),
-      );
+      Map<String, dynamic>? data;
+      if (kIsWeb) {
+        data = await _webPost(ApiConstants.submitEmotion, data: record.toJson());
+      } else {
+        final response = await _dioClient.post(
+          ApiConstants.submitEmotion,
+          data: record.toJson(),
+        );
+        data = response.data;
+      }
 
-      final data = response.data;
       if (data != null && data['success'] == true) {
         // 缓存记录
         await _cacheEmotion(record);
@@ -57,8 +113,13 @@ class EmotionService {
   /// 获取今日情绪记录
   Future<List<EmotionRecord>> getTodayEmotions() async {
     try {
-      final response = await _dioClient.get(ApiConstants.todayEmotions);
-      final data = response.data;
+      Map<String, dynamic>? data;
+      if (kIsWeb) {
+        data = await _webGet(ApiConstants.todayEmotions);
+      } else {
+        final response = await _dioClient.get(ApiConstants.todayEmotions);
+        data = response.data;
+      }
 
       if (data != null && data['records'] != null) {
         final records = (data['records'] as List)

@@ -3,11 +3,13 @@
 library;
 
 import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/sync_service.dart';
+import '../../core/utils/storage_util.dart';
 import '../models/task_instance.dart';
 import '../models/task_template.dart';
 import '../models/step_execution.dart';
@@ -25,15 +27,92 @@ class TaskService {
   static const String _cacheKeyTaskTemplates = 'cache_task_templates';
   static const String _cacheKeyStepExecutions = 'cache_step_executions_';
 
+  /// Web 平台 HTTP GET 请求辅助方法
+  Future<Map<String, dynamic>?> _webGet(String path) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    // 直接从 localStorage 读取最新 token（绕过 SharedPreferences 缓存）
+    // SharedPreferences Web 版本会将值 JSON 编码存储
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try {
+        token = (jsonDecode(rawToken) as String);
+      } catch (_) {
+        token = rawToken;
+      }
+    }
+    final request = html.HttpRequest();
+    request.open('GET', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send(); // GET 请求也需要 send()
+    await request.onLoad.first;
+    if (request.status == 200) {
+      return jsonDecode(request.responseText!) as Map<String, dynamic>;
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
+  }
+
+  /// Web 平台 HTTP POST 请求辅助方法
+  Future<Map<String, dynamic>?> _webPost(String path, {dynamic data}) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try { token = (jsonDecode(rawToken) as String); } catch (_) { token = rawToken; }
+    }
+    final request = html.HttpRequest();
+    request.open('POST', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send(jsonEncode(data));
+    await request.onLoad.first;
+    if (request.status == 200 || request.status == 201) {
+      if (request.responseText != null && request.responseText!.isNotEmpty) {
+        return jsonDecode(request.responseText!) as Map<String, dynamic>;
+      }
+      return {};
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
+  }
+
   /// 获取今日任务列表
   /// 优先从网络获取，失败时从本地缓存读取
   Future<List<TaskInstance>> getTodayTasks() async {
     try {
-      final response = await _dioClient.get(ApiConstants.todayTasks);
-      final data = response.data;
+      List<dynamic>? taskList;
 
-      if (data != null && data['tasks'] != null) {
-        final tasks = (data['tasks'] as List)
+      if (kIsWeb) {
+        final data = await _webGet(ApiConstants.todayTasks);
+        if (data != null) {
+          final inner = data['data'];
+          if (inner is List) {
+            taskList = inner;
+          }
+        }
+      } else {
+        final response = await _dioClient.get(ApiConstants.todayTasks);
+        final data = response.data;
+
+        // 后端返回 { code: 200, message: 'success', data: [...] }
+        if (data is Map) {
+          final inner = data['data'];
+          if (inner is List) {
+            taskList = inner;
+          }
+        } else if (data is List) {
+          taskList = data;
+        }
+      }
+
+      if (taskList != null) {
+        final tasks = taskList
             .map((t) => TaskInstance.fromJson(t as Map<String, dynamic>))
             .toList();
 
@@ -43,6 +122,10 @@ class TaskService {
       }
       return [];
     } catch (e) {
+      // 401 未授权错误向上传播（让上层重新登录）
+      if (e.toString().contains('401')) {
+        rethrow;
+      }
       debugPrint('获取今日任务失败: $e，从缓存读取');
       return _getCachedTodayTasks();
     }
@@ -51,12 +134,23 @@ class TaskService {
   /// 获取任务详情（含步骤模板）
   Future<TaskTemplate?> getTaskDetail(String taskId) async {
     try {
-      final response = await _dioClient.get('${ApiConstants.taskDetail}$taskId');
-      final data = response.data;
+      // 后端路径: /tasks/instances/:instanceId
+      Map<String, dynamic>? inner;
+      if (kIsWeb) {
+        final data = await _webGet('/tasks/instances/$taskId');
+        if (data != null) {
+          inner = data['data'] as Map<String, dynamic>?;
+        }
+      } else {
+        final response = await _dioClient.get('/tasks/instances/$taskId');
+        final data = response.data;
+        if (data != null) {
+          inner = (data is Map ? data['data'] : data) as Map<String, dynamic>?;
+        }
+      }
 
-      if (data != null) {
-        final template = TaskTemplate.fromJson(data);
-        // 缓存模板
+      if (inner != null) {
+        final template = TaskTemplate.fromJson(inner);
         await _cacheTaskTemplate(taskId, template);
         return template;
       }
@@ -82,7 +176,6 @@ class TaskService {
     };
 
     if (isOffline) {
-      // 离线模式：缓存操作，等待联网同步
       await _cacheStepExecution(StepExecution(
         id: 'local_${DateTime.now().millisecondsSinceEpoch}',
         taskInstanceId: taskId,
@@ -93,27 +186,24 @@ class TaskService {
         status: StepExecutionStatus.completed,
         completedTime: DateTime.now(),
       ));
-
-      // 添加到同步队列
       _syncService?.addPendingOperation(
         method: 'POST',
-        path: ApiConstants.completeStep
-            .replaceAll('{taskId}', taskId)
-            .replaceAll('{stepId}', stepId),
+        path: '/tasks/steps/$stepId/complete',
         data: data,
       );
       return true;
     }
 
     try {
-      final path = ApiConstants.completeStep
-          .replaceAll('{taskId}', taskId)
-          .replaceAll('{stepId}', stepId);
-      await _dioClient.post(path, data: data);
+      // 后端路径: /tasks/steps/:executionId/complete
+      if (kIsWeb) {
+        await _webPost('/tasks/steps/$stepId/complete', data: data);
+      } else {
+        await _dioClient.post('/tasks/steps/$stepId/complete', data: data);
+      }
       return true;
     } catch (e) {
       debugPrint('提交步骤完成失败: $e');
-      // 网络失败，缓存操作
       await _cacheStepExecution(StepExecution(
         id: 'local_${DateTime.now().millisecondsSinceEpoch}',
         taskInstanceId: taskId,
@@ -126,42 +216,41 @@ class TaskService {
       ));
       _syncService?.addPendingOperation(
         method: 'POST',
-        path: ApiConstants.completeStep
-            .replaceAll('{taskId}', taskId)
-            .replaceAll('{stepId}', stepId),
+        path: '/tasks/steps/$stepId/complete',
         data: data,
       );
-      return true; // 本地操作成功
+      return true;
     }
   }
 
   /// 提交任务完成
   Future<bool> completeTask(String taskId, {bool isOffline = false}) async {
     final data = {
-      'taskId': taskId,
       'completedAt': DateTime.now().toIso8601String(),
     };
 
     if (isOffline) {
       _syncService?.addPendingOperation(
         method: 'POST',
-        path: ApiConstants.completeTask.replaceAll('{taskId}', taskId),
+        path: '/tasks/instances/$taskId/complete',
         data: data,
       );
       return true;
     }
 
     try {
-      await _dioClient.post(
-        ApiConstants.completeTask.replaceAll('{taskId}', taskId),
-        data: data,
-      );
+      // 后端路径: /tasks/instances/:instanceId/complete
+      if (kIsWeb) {
+        await _webPost('/tasks/instances/$taskId/complete', data: data);
+      } else {
+        await _dioClient.post('/tasks/instances/$taskId/complete', data: data);
+      }
       return true;
     } catch (e) {
       debugPrint('提交任务完成失败: $e');
       _syncService?.addPendingOperation(
         method: 'POST',
-        path: ApiConstants.completeTask.replaceAll('{taskId}', taskId),
+        path: '/tasks/instances/$taskId/complete',
         data: data,
       );
       return true;
@@ -171,9 +260,12 @@ class TaskService {
   /// 请求帮助
   Future<bool> requestHelp(String taskId) async {
     try {
-      await _dioClient.post(
-        ApiConstants.requestHelp.replaceAll('{taskId}', taskId),
-      );
+      // 后端路径: /tasks/instances/:instanceId/help
+      if (kIsWeb) {
+        await _webPost('/tasks/instances/$taskId/help');
+      } else {
+        await _dioClient.post('/tasks/instances/$taskId/help');
+      }
       return true;
     } catch (e) {
       debugPrint('请求帮助失败: $e');

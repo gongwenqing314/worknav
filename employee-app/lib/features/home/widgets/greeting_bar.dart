@@ -5,6 +5,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_text_styles.dart';
+import '../../../core/constants/app_dimensions.dart';
 
 /// 问候栏
 /// 根据当前时间显示不同的问候语

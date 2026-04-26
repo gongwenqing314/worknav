@@ -4,6 +4,7 @@ library;
 
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dio_client.dart';
 import '../constants/api_constants.dart';
@@ -35,7 +36,7 @@ class SyncService {
   final List<Map<String, dynamic>> _pendingOperations = [];
 
   /// 网络状态监听订阅
-  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
   SyncService({
     required DioClient dioClient,
@@ -46,9 +47,15 @@ class SyncService {
 
   /// 初始化同步服务，开始监听网络状态
   Future<void> init() async {
+    if (kIsWeb) {
+      // Web 平台跳过 connectivity_plus（可能不稳定）
+      _updateStatus(SyncStatus.synced);
+      return;
+    }
+
     // 检查初始网络状态
-    final results = await _connectivity.checkConnectivity();
-    _handleConnectivityChange(results);
+    final result = await _connectivity.checkConnectivity();
+    _handleConnectivityChange(result);
 
     // 监听网络状态变化
     _connectivitySubscription = _connectivity.onConnectivityChanged.listen(
@@ -57,9 +64,8 @@ class SyncService {
   }
 
   /// 处理网络状态变化
-  void _handleConnectivityChange(List<ConnectivityResult> results) {
-    final hasConnection = results.isNotEmpty &&
-        !results.contains(ConnectivityResult.none);
+  void _handleConnectivityChange(ConnectivityResult result) {
+    final hasConnection = result != ConnectivityResult.none;
 
     if (hasConnection) {
       _updateStatus(SyncStatus.synced);

@@ -3,67 +3,71 @@
 library;
 
 import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
-import '../../core/network/dio_client.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/utils/storage_util.dart';
 
 /// 认证服务
 class AuthService {
-  final DioClient _dioClient;
-
-  AuthService(this._dioClient);
-
   /// 设备自动登录
-  /// 使用设备唯一标识进行绑定登录，无需手动输入账号密码
   Future<bool> deviceLogin() async {
     try {
-      // 获取设备 ID（已存储则复用，否则生成新的）
+      // 获取设备 ID
       String? deviceId = StorageUtil.getString(StorageUtil.keyDeviceId);
       if (deviceId == null || deviceId.isEmpty) {
         deviceId = await _getDeviceId();
         await StorageUtil.setString(StorageUtil.keyDeviceId, deviceId);
       }
 
-      // 调用设备登录接口
-      final response = await _dioClient.post(
-        ApiConstants.deviceLogin,
-        data: {
+      debugPrint('设备登录: 使用设备ID = $deviceId');
+
+      // 使用 dart:html HttpRequest 直接发送请求（绕过 Dio Web 兼容性问题）
+      final response = await _httpPost(
+        '${ApiConstants.baseUrl}${ApiConstants.deviceLogin}',
+        {
           'deviceId': deviceId,
           'platform': _getPlatformName(),
           'appVersion': '1.0.0',
         },
       );
 
-      final data = response.data;
-      if (data != null && data['success'] == true) {
-        // 保存认证信息
-        final token = data['accessToken'] as String?;
-        final refreshToken = data['refreshToken'] as String?;
-        final employeeId = data['employeeId'] as String?;
-        final employeeName = data['employeeName'] as String?;
+      debugPrint('设备登录: 响应 code = ${response['code']}');
 
-        if (token != null) {
-          await StorageUtil.setString(StorageUtil.keyAuthToken, token);
-          if (refreshToken != null) {
-            await StorageUtil.setString(
-                StorageUtil.keyRefreshToken, refreshToken);
+      if (response['code'] == 200) {
+        final inner = response['data'];
+        if (inner != null && inner is Map<String, dynamic>) {
+          final token = inner['accessToken'] as String?;
+          final refreshToken = inner['refreshToken'] as String?;
+          final employeeId = inner['employeeId']?.toString();
+          final employeeName = inner['employeeName'] as String?;
+
+          if (token != null) {
+            await StorageUtil.setString(StorageUtil.keyAuthToken, token);
+            if (refreshToken != null) {
+              await StorageUtil.setString(
+                  StorageUtil.keyRefreshToken, refreshToken);
+            }
+            if (employeeId != null) {
+              await StorageUtil.setString(StorageUtil.keyEmployeeId, employeeId);
+            }
+            if (employeeName != null) {
+              await StorageUtil.setString(
+                  StorageUtil.keyEmployeeName, employeeName);
+            }
+            await StorageUtil.setBool(StorageUtil.keyIsLoggedIn, true);
+            debugPrint('设备登录: 成功, 员工=$employeeName');
+            return true;
           }
-          if (employeeId != null) {
-            await StorageUtil.setString(StorageUtil.keyEmployeeId, employeeId);
-          }
-          if (employeeName != null) {
-            await StorageUtil.setString(
-                StorageUtil.keyEmployeeName, employeeName);
-          }
-          await StorageUtil.setBool(StorageUtil.keyIsLoggedIn, true);
-          return true;
         }
       }
+
+      debugPrint('设备登录: 登录失败');
       return false;
-    } catch (e) {
+    } catch (e, stack) {
       debugPrint('设备登录失败: $e');
+      debugPrint('堆栈: $stack');
       return false;
     }
   }
@@ -87,12 +91,9 @@ class AuthService {
   /// 登出
   Future<void> logout() async {
     try {
-      await _dioClient.post(ApiConstants.logout);
-    } catch (_) {
-      // 即使接口失败也要清除本地数据
-    }
+      await _httpPost('${ApiConstants.baseUrl}${ApiConstants.logout}', {});
+    } catch (_) {}
 
-    // 清除本地认证信息
     await StorageUtil.remove(StorageUtil.keyAuthToken);
     await StorageUtil.remove(StorageUtil.keyRefreshToken);
     await StorageUtil.setBool(StorageUtil.keyIsLoggedIn, false);
@@ -100,17 +101,54 @@ class AuthService {
 
   /// 获取设备唯一标识
   Future<String> _getDeviceId() async {
-    // 简化实现：使用时间戳 + 随机数生成
-    // 实际项目中应使用 device_info_plus 获取真实设备标识
+    if (kIsWeb) {
+      final existing = StorageUtil.getString(StorageUtil.keyDeviceId);
+      if (existing != null && existing.isNotEmpty) return existing;
+      return 'web_device_xiaoming';
+    }
     final timestamp = DateTime.now().millisecondsSinceEpoch;
     final random = DateTime.now().microsecond;
     return 'device_${timestamp}_$random';
   }
 
-  /// 获取平台名称
+  /// 获取平台名称（兼容 Web）
   String _getPlatformName() {
-    if (Platform.isAndroid) return 'android';
-    if (Platform.isIOS) return 'ios';
+    if (kIsWeb) return 'web';
     return 'unknown';
+  }
+
+  /// HTTP POST 请求（使用 dart:html）
+  Future<Map<String, dynamic>> _httpPost(String url, Map<String, dynamic> data) async {
+    final completer = Completer<Map<String, dynamic>>();
+    final request = html.HttpRequest();
+
+    request.open('POST', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+
+    request.onLoad.first.then((_) {
+      try {
+        if (request.status == 200 || request.status == 201) {
+          final body = request.responseText;
+          if (body != null && body.isNotEmpty) {
+            completer.complete(jsonDecode(body) as Map<String, dynamic>);
+          } else {
+            completer.complete({'code': 200, 'data': null});
+          }
+        } else {
+          debugPrint('HTTP POST $url 返回 ${request.status}');
+          completer.complete({'code': request.status, 'message': '请求失败', 'data': null});
+        }
+      } catch (e) {
+        completer.completeError(e);
+      }
+    });
+
+    request.onError.first.then((_) {
+      completer.completeError(Exception('网络请求失败'));
+    });
+
+    request.send(jsonEncode(data));
+    return completer.future;
   }
 }

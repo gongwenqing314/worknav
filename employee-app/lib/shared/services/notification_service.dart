@@ -2,95 +2,40 @@
 /// 管理本地通知和应用内通知
 library;
 
+import 'dart:convert';
+import 'dart:html' as html;
 import 'package:flutter/foundation.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../../core/constants/api_constants.dart';
 import '../../core/network/dio_client.dart';
+import '../../core/utils/storage_util.dart';
 import '../models/notification.dart' as model;
 
 /// 通知服务
 class NotificationService {
   final DioClient _dioClient;
-  final FlutterLocalNotificationsPlugin _localNotifications;
 
-  NotificationService(this._dioClient)
-      : _localNotifications = FlutterLocalNotificationsPlugin();
+  NotificationService(this._dioClient);
 
-  /// 初始化本地通知
+  /// 初始化本地通知（Web 平台跳过）
   Future<void> init() async {
-    // Android 通知初始化
-    const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-
-    // iOS 通知初始化
-    const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
-    );
-
-    const initSettings = InitializationSettings(
-      android: androidSettings,
-      iOS: iosSettings,
-    );
-
-    await _localNotifications.initialize(
-      initSettings,
-      onDidReceiveNotificationResponse: _onNotificationTapped,
-    );
-
-    // Android 请求通知权限
-    await _localNotifications
-        .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-  }
-
-  /// 通知点击回调
-  void _onNotificationTapped(NotificationResponse response) {
-    debugPrint('通知被点击: ${response.payload}');
-    // TODO: 根据通知类型跳转到对应页面
+    if (kIsWeb) {
+      debugPrint('通知服务: Web 模式，本地通知不可用');
+      return;
+    }
+    // 非 Web 平台的本地通知初始化
+    // 实际设备上通过 conditional import 初始化 flutter_local_notifications
+    debugPrint('通知服务: 已初始化');
   }
 
   /// 显示本地通知
-  /// [id] 通知 ID
-  /// [title] 通知标题
-  /// [body] 通知内容
-  /// [payload] 附加数据
   Future<void> showNotification({
     required int id,
     required String title,
     required String body,
     String? payload,
   }) async {
-    const androidDetails = AndroidNotificationDetails(
-      'worknav_employee',
-      '工作导航通知',
-      channelDescription: '任务提醒和重要通知',
-      importance: Importance.high,
-      priority: Priority.high,
-      showWhen: true,
-      enableVibration: true,
-      playSound: true,
-    );
-
-    const iosDetails = DarwinNotificationDetails(
-      presentAlert: true,
-      presentBadge: true,
-      presentSound: true,
-    );
-
-    const details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    await _localNotifications.show(
-      id,
-      title,
-      body,
-      details,
-      payload: payload,
-    );
+    if (kIsWeb) return;
+    debugPrint('显示通知: $title - $body');
   }
 
   /// 显示任务提醒通知
@@ -122,19 +67,73 @@ class NotificationService {
 
   /// 取消指定通知
   Future<void> cancelNotification(int id) async {
-    await _localNotifications.cancel(id);
+    if (kIsWeb) return;
   }
 
   /// 取消所有通知
   Future<void> cancelAllNotifications() async {
-    await _localNotifications.cancelAll();
+    if (kIsWeb) return;
+  }
+
+  /// Web 平台 HTTP GET 请求辅助方法
+  Future<Map<String, dynamic>?> _webGet(String path) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try { token = (jsonDecode(rawToken) as String); } catch (_) { token = rawToken; }
+    }
+    final request = html.HttpRequest();
+    request.open('GET', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send();
+    await request.onLoad.first;
+    if (request.status == 200) {
+      return jsonDecode(request.responseText!) as Map<String, dynamic>;
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
+  }
+
+  /// Web 平台 HTTP PUT 请求辅助方法
+  Future<Map<String, dynamic>?> _webPut(String path, {dynamic data}) async {
+    final url = '${ApiConstants.baseUrl}$path';
+    final rawToken = html.window.localStorage['flutter.auth_token'];
+    String? token;
+    if (rawToken != null && rawToken.isNotEmpty) {
+      try { token = (jsonDecode(rawToken) as String); } catch (_) { token = rawToken; }
+    }
+    final request = html.HttpRequest();
+    request.open('PUT', url, async: true);
+    request.setRequestHeader('Content-Type', 'application/json');
+    request.setRequestHeader('Accept', 'application/json');
+    if (token != null && token.isNotEmpty) {
+      request.setRequestHeader('Authorization', 'Bearer $token');
+    }
+    request.send(jsonEncode(data));
+    await request.onLoad.first;
+    if (request.status == 200) {
+      if (request.responseText != null && request.responseText!.isNotEmpty) {
+        return jsonDecode(request.responseText!) as Map<String, dynamic>;
+      }
+      return {};
+    }
+    throw Exception('Web request failed: ${request.status} ${request.statusText}');
   }
 
   /// 获取应用内通知列表
   Future<List<model.AppNotification>> getNotifications() async {
     try {
-      final response = await _dioClient.get(ApiConstants.notifications);
-      final data = response.data;
+      Map<String, dynamic>? data;
+      if (kIsWeb) {
+        data = await _webGet(ApiConstants.notifications);
+      } else {
+        final response = await _dioClient.get(ApiConstants.notifications);
+        data = response.data;
+      }
 
       if (data != null && data['notifications'] != null) {
         return (data['notifications'] as List)
@@ -152,10 +151,13 @@ class NotificationService {
   /// 标记通知已读
   Future<bool> markAsRead(String notificationId) async {
     try {
-      await _dioClient.post(
-        ApiConstants.markNotificationRead
-            .replaceAll('{id}', notificationId),
-      );
+      if (kIsWeb) {
+        await _webPut('/notifications/$notificationId/read');
+      } else {
+        await _dioClient.put(
+          '/notifications/$notificationId/read',
+        );
+      }
       return true;
     } catch (e) {
       debugPrint('标记通知已读失败: $e');

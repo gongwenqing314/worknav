@@ -17,7 +17,10 @@ class StorageUtil {
 
   /// 确保 SharedPreferences 已初始化
   static SharedPreferences get _instance {
-    assert(_prefs != null, 'StorageUtil 未初始化，请先调用 StorageUtil.init()');
+    if (_prefs == null) {
+      // Web release 模式下 assert 不执行，需要运行时检查
+      throw StateError('StorageUtil 未初始化，请先调用 StorageUtil.init()');
+    }
     return _prefs!;
   }
 

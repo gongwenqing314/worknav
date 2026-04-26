@@ -3,6 +3,8 @@
 library;
 
 import 'package:dio/dio.dart';
+import 'package:dio/browser.dart';
+import 'package:flutter/foundation.dart';
 import 'api_interceptor.dart';
 import '../constants/api_constants.dart';
 
@@ -15,13 +17,17 @@ class DioClient {
         baseUrl: ApiConstants.baseUrl,
         connectTimeout: const Duration(seconds: ApiConstants.connectTimeout),
         receiveTimeout: const Duration(seconds: ApiConstants.receiveTimeout),
-        sendTimeout: const Duration(seconds: ApiConstants.sendTimeout),
         headers: {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
       ),
     );
+
+    // Web 平台使用 BrowserHttpClientAdapter
+    if (kIsWeb) {
+      _dio.httpClientAdapter = BrowserHttpClientAdapter(withCredentials: false);
+    }
 
     // 添加认证拦截器
     _dio.interceptors.add(ApiInterceptor(_dio));

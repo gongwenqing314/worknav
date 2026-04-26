@@ -83,28 +83,75 @@ class TaskInstance {
   /// 是否需要帮助
   bool get needsHelp => status == TaskStatus.needHelp;
 
-  /// 从 JSON 创建
+  /// 从 JSON 创建（兼容后端 snake_case 和前端 camelCase）
   factory TaskInstance.fromJson(Map<String, dynamic> json) {
+    // 解析步骤列表（后端返回 steps 数组）
+    final steps = json['steps'] as List?;
+    final totalSteps = steps?.length ?? (json['totalSteps'] as int? ?? (json['total_steps'] as int? ?? 0));
+
+    // 解析计划时间（后端返回 "09:00:00" 格式的时间字符串或完整日期时间）
+    DateTime scheduledTime;
+    final scheduledTimeStr = json['scheduledTime'] as String? ?? json['scheduled_time'] as String?;
+    if (scheduledTimeStr != null) {
+      try {
+        scheduledTime = DateTime.parse(scheduledTimeStr);
+      } catch (_) {
+        // 如果只是时间字符串（如 "09:00:00"），结合 scheduled_date 构造日期时间
+        final scheduledDateStr = json['scheduledDate'] as String? ?? json['scheduled_date'] as String?;
+        if (scheduledDateStr != null) {
+          // scheduled_date 可能是 ISO 格式，提取日期部分
+          final dateOnly = scheduledDateStr.length > 10 ? scheduledDateStr.substring(0, 10) : scheduledDateStr;
+          scheduledTime = DateTime.parse('$dateOnly $scheduledTimeStr');
+        } else {
+          // 使用今天的日期
+          final now = DateTime.now();
+          final parts = scheduledTimeStr.split(':');
+          scheduledTime = DateTime(now.year, now.month, now.day,
+              int.parse(parts[0]), int.parse(parts[1]));
+        }
+      }
+    } else {
+      scheduledTime = DateTime.now();
+    }
+
+    // 解析开始时间
+    DateTime? startTime;
+    final startTimeStr = json['startTime'] as String? ?? json['started_at'] as String?;
+    if (startTimeStr != null && startTimeStr.isNotEmpty && startTimeStr != 'null') {
+      try {
+        startTime = DateTime.parse(startTimeStr);
+      } catch (_) {
+        startTime = null;
+      }
+    }
+
+    // 解析完成时间
+    DateTime? completedTime;
+    final completedTimeStr = json['completedTime'] as String? ?? json['completed_at'] as String?;
+    if (completedTimeStr != null && completedTimeStr.isNotEmpty && completedTimeStr != 'null') {
+      try {
+        completedTime = DateTime.parse(completedTimeStr);
+      } catch (_) {
+        completedTime = null;
+      }
+    }
+
     return TaskInstance(
-      id: json['id'] as String,
-      templateId: json['templateId'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
-      iconUrl: json['iconUrl'] as String? ?? '',
-      iconColor: json['iconColor'] as String? ?? '#4CAF50',
+      id: (json['id'] ?? json['instanceId'] ?? '').toString(),
+      templateId: (json['templateId'] ?? json['template_id'] ?? '').toString(),
+      name: json['name'] as String? ?? json['template_title'] as String? ?? '',
+      description: json['description'] as String? ?? json['template_description'] as String? ?? '',
+      iconUrl: json['iconUrl'] as String? ?? json['icon_url'] as String? ?? '',
+      iconColor: json['iconColor'] as String? ?? json['icon_color'] as String? ?? '#4CAF50',
       status: _parseStatus(json['status'] as String?),
-      totalSteps: json['totalSteps'] as int? ?? 0,
-      completedSteps: json['completedSteps'] as int? ?? 0,
-      currentStepIndex: json['currentStepIndex'] as int? ?? 0,
-      scheduledTime: DateTime.parse(json['scheduledTime'] as String),
-      startTime: json['startTime'] != null
-          ? DateTime.parse(json['startTime'] as String)
-          : null,
-      completedTime: json['completedTime'] != null
-          ? DateTime.parse(json['completedTime'] as String)
-          : null,
-      assignedBy: json['assignedBy'] as String? ?? '',
-      isOffline: json['isOffline'] as bool? ?? false,
+      totalSteps: totalSteps,
+      completedSteps: json['completedSteps'] as int? ?? json['completed_steps'] as int? ?? 0,
+      currentStepIndex: json['currentStepIndex'] as int? ?? json['current_step_index'] as int? ?? 0,
+      scheduledTime: scheduledTime,
+      startTime: startTime,
+      completedTime: completedTime,
+      assignedBy: (json['assignedBy'] ?? json['assigned_by'] ?? '').toString(),
+      isOffline: json['isOffline'] as bool? ?? json['is_offline'] as bool? ?? false,
     );
   }
 
@@ -133,13 +180,16 @@ class TaskInstance {
   static TaskStatus _parseStatus(String? statusStr) {
     switch (statusStr) {
       case 'inProgress':
+      case 'in_progress':
         return TaskStatus.inProgress;
       case 'completed':
         return TaskStatus.completed;
       case 'needHelp':
+      case 'need_help':
         return TaskStatus.needHelp;
       case 'skipped':
         return TaskStatus.skipped;
+      case 'assigned':
       case 'pending':
       default:
         return TaskStatus.pending;

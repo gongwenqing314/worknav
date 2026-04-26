@@ -50,7 +50,7 @@ class AppTheme {
         ),
 
         // 卡片主题
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           elevation: 2,
           shadowColor: AppColors.shadow,
           shape: RoundedRectangleBorder(
@@ -169,7 +169,7 @@ class AppTheme {
         ),
 
         // 对话框主题
-        dialogTheme: DialogTheme(
+        dialogTheme: DialogThemeData(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(20),
           ),

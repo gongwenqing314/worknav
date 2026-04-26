@@ -3,7 +3,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
-import 'package:just_audio/just_audio.dart';
+import 'package:just_audio/just_audio.dart' as just_audio;
 
 /// 音频播放降级策略枚举
 enum AudioPlaybackStrategy {
@@ -97,7 +97,7 @@ class AudioPlayer {
 
 /// JustAudio 播放器封装
 class JustAudioPlayer {
-  final AudioPlayer _player = AudioPlayer();
+  final just_audio.AudioPlayer _player = just_audio.AudioPlayer();
 
   Future<void> init() async {
     // 配置播放器参数

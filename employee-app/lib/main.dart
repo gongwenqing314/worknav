@@ -56,8 +56,8 @@ void main() async {
         // 同步服务
         Provider<SyncService>.value(value: syncService),
         // 认证服务
-        ProxyProvider<DioClient, AuthService>(
-          update: (_, dioClient, __) => AuthService(dioClient),
+        Provider<AuthService>.value(
+          value: AuthService(),
         ),
         // 任务服务
         ProxyProvider2<DioClient, SyncService, TaskService>(

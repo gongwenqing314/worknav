@@ -4,6 +4,8 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../shared/models/task_instance.dart';
+import '../../../shared/services/task_service.dart';
+import '../../../shared/services/auth_service.dart';
 
 /// 主页状态
 enum HomeState {
@@ -19,6 +21,11 @@ enum HomeState {
 
 /// 主页控制器
 class HomeController extends ChangeNotifier {
+  final TaskService _taskService;
+  final AuthService _authService;
+
+  HomeController(this._taskService, this._authService);
+
   /// 当前状态
   HomeState _state = HomeState.loading;
   HomeState get state => _state;
@@ -55,15 +62,39 @@ class HomeController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // 模拟网络请求
-      // 实际项目中调用 TaskService.getTodayTasks()
-      await Future.delayed(const Duration(seconds: 1));
+      // 获取员工姓名
+      _employeeName = _authService.getEmployeeName() ?? '';
+      debugPrint('HomeController: 开始加载任务, 员工=$_employeeName');
 
-      // 模拟数据
-      _tasks = _getMockTasks();
-      _employeeName = '小明';
+      // 调用后端获取今日任务
+      var tasks = await _taskService.getTodayTasks();
+      debugPrint('HomeController: 获取到 ${tasks.length} 条任务');
+      _tasks = tasks;
+      _syncStatus = '已同步';
       _state = _tasks.isEmpty ? HomeState.empty : HomeState.ready;
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('HomeController: 加载任务失败: $e');
+
+      // 如果是 401 错误，尝试重新登录后重试
+      if (e.toString().contains('401')) {
+        debugPrint('HomeController: 401 错误，尝试重新登录');
+        final loggedIn = await _authService.deviceLogin();
+        if (loggedIn) {
+          _employeeName = _authService.getEmployeeName() ?? '';
+          try {
+            final tasks = await _taskService.getTodayTasks();
+            debugPrint('HomeController: 重新登录后获取到 ${tasks.length} 条任务');
+            _tasks = tasks;
+            _syncStatus = '已同步';
+            _state = _tasks.isEmpty ? HomeState.empty : HomeState.ready;
+            notifyListeners();
+            return;
+          } catch (e2) {
+            debugPrint('HomeController: 重新登录后仍然失败: $e2');
+          }
+        }
+      }
+
       _errorMessage = '加载任务失败，请检查网络连接';
       _state = HomeState.error;
     }
@@ -93,70 +124,4 @@ class HomeController extends ChangeNotifier {
   /// 获取已完成任务数量
   int get completedCount =>
       _tasks.where((t) => t.status == TaskStatus.completed).length;
-
-  /// 模拟任务数据
-  List<TaskInstance> _getMockTasks() {
-    final now = DateTime.now();
-    return [
-      TaskInstance(
-        id: 'task_1',
-        templateId: 'tpl_1',
-        name: '整理货架',
-        description: '将商品按类别摆放到对应货架上',
-        iconUrl: '',
-        iconColor: '#4CAF50',
-        status: TaskStatus.inProgress,
-        totalSteps: 5,
-        completedSteps: 2,
-        currentStepIndex: 2,
-        scheduledTime: DateTime(now.year, now.month, now.day, 9, 0),
-        startTime: DateTime(now.year, now.month, now.day, 9, 5),
-        assignedBy: 'admin_1',
-      ),
-      TaskInstance(
-        id: 'task_2',
-        templateId: 'tpl_2',
-        name: '清洁桌面',
-        description: '用抹布擦拭所有工作台面',
-        iconUrl: '',
-        iconColor: '#2196F3',
-        status: TaskStatus.pending,
-        totalSteps: 3,
-        completedSteps: 0,
-        currentStepIndex: 0,
-        scheduledTime: DateTime(now.year, now.month, now.day, 10, 30),
-        assignedBy: 'admin_1',
-      ),
-      TaskInstance(
-        id: 'task_3',
-        templateId: 'tpl_3',
-        name: '包装商品',
-        description: '将商品装入包装盒并贴上标签',
-        iconUrl: '',
-        iconColor: '#FF9800',
-        status: TaskStatus.pending,
-        totalSteps: 4,
-        completedSteps: 0,
-        currentStepIndex: 0,
-        scheduledTime: DateTime(now.year, now.month, now.day, 14, 0),
-        assignedBy: 'admin_2',
-      ),
-      TaskInstance(
-        id: 'task_4',
-        templateId: 'tpl_4',
-        name: '清点库存',
-        description: '清点指定区域的商品数量',
-        iconUrl: '',
-        iconColor: '#9C27B0',
-        status: TaskStatus.completed,
-        totalSteps: 6,
-        completedSteps: 6,
-        currentStepIndex: 6,
-        scheduledTime: DateTime(now.year, now.month, now.day, 8, 0),
-        startTime: DateTime(now.year, now.month, now.day, 8, 0),
-        completedTime: DateTime(now.year, now.month, now.day, 8, 45),
-        assignedBy: 'admin_1',
-      ),
-    ];
-  }
 }

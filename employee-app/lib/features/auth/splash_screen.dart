@@ -36,11 +36,7 @@ class _SplashScreenState extends State<SplashScreen>
   late Animation<double> _fadeAnimation;
 
   /// 认证服务
-  final AuthService _authService = AuthService(
-    // DioClient 将在 app.dart 中通过 Provider 提供
-    // 这里使用简化初始化
-    _createDioClient(),
-  );
+  final AuthService _authService = AuthService();
 
   @override
   void initState() {
@@ -49,13 +45,6 @@ class _SplashScreenState extends State<SplashScreen>
     _performAutoLogin();
   }
 
-  /// 创建 DioClient（简化版，实际应通过依赖注入）
-  static dynamic _createDioClient() {
-    // 简化实现 - 实际项目中通过 Provider 获取
-    return null;
-  }
-
-  /// 初始化动画
   void _initAnimations() {
     _fadeController = AnimationController(
       vsync: this,
@@ -86,23 +75,28 @@ class _SplashScreenState extends State<SplashScreen>
     });
 
     try {
-      // 模拟自动登录过程
-      // 实际项目中调用 _authService.deviceLogin()
-      await Future.delayed(const Duration(seconds: 2));
+      // 调用设备自动登录接口
+      final success = await _authService.deviceLogin();
 
-      // 模拟登录成功
-      setState(() {
-        _loginSuccess = true;
-        _isLoading = false;
-      });
+      if (success) {
+        setState(() {
+          _loginSuccess = true;
+          _isLoading = false;
+        });
 
-      // 播放欢迎语音
-      AudioPlayer().speak('你好，开始今天的工作吧。');
-      VibrationUtil.light();
+        // 播放欢迎语音
+        AudioPlayer().speak('你好，开始今天的工作吧。');
+        VibrationUtil.light();
 
-      // 延迟后跳转主页
-      await Future.delayed(const Duration(seconds: 2));
-      _navigateToHome();
+        // 延迟后跳转主页
+        await Future.delayed(const Duration(seconds: 2));
+        _navigateToHome();
+      } else {
+        setState(() {
+          _isLoading = false;
+          _errorMessage = '设备未绑定，请联系辅导员绑定设备';
+        });
+      }
     } catch (e) {
       setState(() {
         _isLoading = false;
