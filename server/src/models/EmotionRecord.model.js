@@ -50,6 +50,18 @@ class EmotionRecordModel {
   }
 
   /**
+   * 标记情绪记录为已处理
+   */
+  static async markHandled(recordId, { handledBy, note } = {}) {
+    const [result] = await pool.execute(
+      `UPDATE emotion_records SET handled = 1, handled_at = NOW(), handled_by = ?, note = COALESCE(?, note)
+       WHERE id = ?`,
+      [handledBy || null, note || null, recordId]
+    );
+    return result.affectedRows > 0;
+  }
+
+  /**
    * 统计员工情绪记录数量
    */
   static async countByEmployee(employeeId, { startDate = null, endDate = null } = {}) {
@@ -70,6 +82,33 @@ class EmotionRecordModel {
       params
     );
     return rows[0].total;
+  }
+
+  /**
+   * 查询消极情绪记录（用于预警列表）
+   */
+  static async findNegative({ emotions = [], offset = 0, limit = 20, handled } = {}) {
+    const safeOffset = parseInt(offset, 10) || 0;
+    const safeLimit = parseInt(limit, 10) || 20;
+    const placeholders = emotions.map(() => '?').join(',');
+
+    const conditions = [`emotion_type IN (${placeholders})`];
+    const params = [...emotions];
+
+    if (handled === false) {
+      conditions.push('handled = 0');
+    } else if (handled === true) {
+      conditions.push('handled = 1');
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT * FROM emotion_records
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY recorded_at DESC
+       LIMIT ${safeOffset}, ${safeLimit}`,
+      params
+    );
+    return rows;
   }
 
   /**

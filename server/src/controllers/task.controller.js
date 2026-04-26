@@ -213,9 +213,9 @@ class TaskController {
         instances = await TaskInstanceModel.findByEmployee(req.user.id, { offset, limit, status, date });
         total = await TaskInstanceModel.countByEmployee(req.user.id, status);
       } else if (['counselor', 'co_counselor'].includes(req.user.role)) {
-        // 辅导员看负责的员工的任务
+        // 辅导员看分配的任务
         instances = await TaskInstanceModel.findByCounselor(req.user.id, { offset, limit, status, date });
-        total = instances.length; // 简化处理
+        total = await TaskInstanceModel.countByCounselor(req.user.id, status);
       } else {
         return notFound(res, '无权查看');
       }
@@ -447,6 +447,132 @@ class TaskController {
         req.params.executionId, req.user.id, { durationSeconds, note }
       );
       return success(res, result, result.taskCompleted ? '任务已完成' : '步骤已完成');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 获取任务执行记录（监控页面用）
+   * GET /api/v1/tasks/:taskId/executions
+   * 返回该任务实例的所有步骤执行进度
+   */
+  async getExecutions(req, res, next) {
+    try {
+      const { taskId } = req.params;
+
+      // 获取任务实例信息
+      const instance = await TaskInstanceModel.findById(taskId);
+      if (!instance) {
+        return notFound(res, '任务不存在');
+      }
+
+      // 获取任务进度（含步骤执行记录）
+      const progress = await taskService.getTaskProgress(taskId);
+      const { steps } = progress;
+
+      // 获取员工信息
+      const User = require('../models/User.model');
+      const employee = await User.findById(instance.employee_id);
+
+      // 组装执行记录数据
+      const executionData = {
+        employeeId: instance.employee_id,
+        employeeName: employee ? (employee.real_name || employee.username) : '未知',
+        status: instance.status,
+        startTime: instance.started_at
+          ? new Date(instance.started_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+          : null,
+        steps: steps.map(s => ({
+          id: s.id,
+          title: s.step_title || s.title || '',
+          status: s.status,
+          duration: s.duration_seconds != null ? `${s.duration_seconds}秒` : null,
+          startedAt: s.started_at != null,
+          completedAt: s.completed_at,
+        })),
+      };
+
+      return success(res, [executionData]);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 获取今日任务（员工端）
+   * GET /api/v1/tasks/today
+   */
+  async todayTasks(req, res, next) {
+    try {
+      const { pool } = require('../config/database');
+      const today = new Date().toISOString().slice(0, 10);
+
+      const [rows] = await pool.execute(
+        `SELECT ti.*, tt.title as template_title, tt.description as template_description
+         FROM task_instances ti
+         JOIN task_templates tt ON ti.template_id = tt.id
+         WHERE ti.employee_id = ? AND ti.scheduled_date = ?
+         ORDER BY ti.scheduled_time ASC`,
+        [req.user.id, today]
+      );
+
+      // 获取每个任务的步骤
+      const result = [];
+      for (const row of rows) {
+        const [steps] = await pool.execute(
+          `SELECT * FROM template_steps WHERE template_id = ? ORDER BY step_order`,
+          [row.template_id]
+        );
+        result.push({ ...row, steps });
+      }
+
+      return success(res, result);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 完成任务（员工端）
+   * POST /api/v1/tasks/instances/:instanceId/complete
+   */
+  async completeTask(req, res, next) {
+    try {
+      const { pool } = require('../config/database');
+      const { instanceId } = req.params;
+
+      await pool.execute(
+        `UPDATE task_instances SET status = 'completed', completed_at = NOW() WHERE id = ? AND employee_id = ?`,
+        [instanceId, req.user.id]
+      );
+
+      return success(res, null, '任务已完成');
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 请求帮助（员工端）
+   * POST /api/v1/tasks/instances/:instanceId/help
+   */
+  async requestHelp(req, res, next) {
+    try {
+      const { pool } = require('../config/database');
+      const { instanceId } = req.params;
+      const { stepId, message } = req.body;
+
+      // 创建远程协助会话
+      const [result] = await pool.execute(
+        `INSERT INTO assist_sessions (employee_id, task_instance_id, status, created_at)
+         VALUES (?, ?, 'pending', NOW())`,
+        [req.user.id, instanceId]
+      );
+
+      // TODO: 可通过 WebSocket 通知辅导员
+
+      return success(res, { sessionId: result.insertId }, '帮助请求已发送');
     } catch (err) {
       next(err);
     }

@@ -60,6 +60,12 @@ router.put('/categories/:categoryId', isCounselor, communicationController.updat
 router.delete('/categories/:categoryId', isCounselor, communicationController.deleteCategory);
 
 /**
+ * 获取所有常用语（员工端，不分分类）
+ * GET /api/v1/communication/phrases
+ */
+router.get('/phrases', communicationController.allPhrases);
+
+/**
  * 获取分类下的常用语列表
  * GET /api/v1/communication/categories/:categoryId/phrases
  */

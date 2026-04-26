@@ -191,6 +191,26 @@ class CommunicationController {
       next(err);
     }
   }
+
+  /**
+   * 获取所有常用语（不分分类，员工端用）
+   * GET /api/v1/communication/phrases
+   */
+  async allPhrases(req, res, next) {
+    try {
+      const { pool } = require('../config/database');
+      const [rows] = await pool.execute(
+        `SELECT p.*, c.name as category_name
+         FROM communication_phrases p
+         LEFT JOIN communication_categories c ON p.category_id = c.id
+         WHERE p.is_active = 1
+         ORDER BY c.name, p.display_order`
+      );
+      return success(res, rows);
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new CommunicationController();

@@ -27,18 +27,23 @@ const server = http.createServer(app);
 // 中间件配置
 // ============================================================
 
+// CORS 跨域配置（必须在 Helmet 之前）
+app.use(cors({
+  origin: (origin, callback) => {
+    // 开发环境允许所有来源
+    callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true,
+}));
+
 // 安全防护（Helmet）
 app.use(helmet({
   contentSecurityPolicy: false, // 允许前端加载各种资源
   crossOriginEmbedderPolicy: false,
-}));
-
-// CORS 跨域配置
-app.use(cors({
-  origin: config.isDev ? '*' : (config.wsCorsOrigin || '*'),
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true,
+  crossOriginOpenerPolicy: false,
+  crossOriginResourcePolicy: false,
 }));
 
 // 请求体解析
@@ -47,6 +52,9 @@ app.use(express.urlencoded({ extended: true }));
 
 // Gzip 压缩
 app.use(compression());
+
+// 员工端 Flutter Web 静态文件（同源，无 CORS 问题）
+app.use('/employee-app', express.static(path.resolve(__dirname, '../public/employee-app')));
 
 // 静态文件服务（上传文件）
 app.use('/uploads', express.static(path.resolve(config.upload.dir)));

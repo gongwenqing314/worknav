@@ -196,7 +196,7 @@ CREATE TABLE IF NOT EXISTS emotion_records (
   employee_id   BIGINT       NOT NULL COMMENT '员工用户ID',
   emotion_type  ENUM('happy', 'calm', 'anxious', 'sad', 'angry', 'confused') NOT NULL COMMENT '情绪类型',
   intensity     TINYINT      NOT NULL DEFAULT 3 COMMENT '情绪强度 1-5',
-  trigger       VARCHAR(500) DEFAULT NULL COMMENT '触发原因',
+  `trigger`       VARCHAR(500) DEFAULT NULL COMMENT '触发原因',
   note          TEXT         DEFAULT NULL COMMENT '备注',
   recorded_at   DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '记录时间',
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,

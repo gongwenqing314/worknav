@@ -28,11 +28,11 @@ class EmotionAlertRuleModel {
   /**
    * 创建预警规则
    */
-  static async create({ employeeId, negativeTypes, consecutiveDays, minIntensity, notifyCounselor, notifyParent }) {
+  static async create({ employeeId, name, negativeTypes, consecutiveDays, minIntensity, notifyCounselor, notifyParent }) {
     const [result] = await pool.execute(
-      `INSERT INTO emotion_alert_rules (employee_id, negative_types, consecutive_days, min_intensity, notify_counselor, notify_parent)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [employeeId || null, JSON.stringify(negativeTypes), consecutiveDays || 3, minIntensity || 3, notifyCounselor !== undefined ? notifyCounselor : 1, notifyParent !== undefined ? notifyParent : 1]
+      `INSERT INTO emotion_alert_rules (employee_id, name, negative_types, consecutive_days, min_intensity, notify_counselor, notify_parent)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [employeeId || null, name || '', JSON.stringify(negativeTypes), consecutiveDays || 3, minIntensity || 3, notifyCounselor !== undefined ? notifyCounselor : 1, notifyParent !== undefined ? notifyParent : 1]
     );
     return result.insertId;
   }
@@ -41,7 +41,7 @@ class EmotionAlertRuleModel {
    * 更新预警规则
    */
   static async update(id, fields) {
-    const allowedFields = ['negative_types', 'consecutive_days', 'min_intensity', 'notify_counselor', 'notify_parent', 'is_active'];
+    const allowedFields = ['name', 'negative_types', 'consecutive_days', 'min_intensity', 'notify_counselor', 'notify_parent', 'is_active'];
     const updates = [];
     const values = [];
 

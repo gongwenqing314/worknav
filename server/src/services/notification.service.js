@@ -86,6 +86,18 @@ class NotificationService {
   }
 
   /**
+   * 发送通用通知
+   */
+  async sendNotification(fromUserId, toUserId, { title, content, type = 'system' }) {
+    return this.sendToUser(toUserId, {
+      type,
+      title,
+      content,
+      data: { fromUserId },
+    });
+  }
+
+  /**
    * 发送任务分配通知
    */
   async sendTaskAssigned(employeeId, { instanceId, templateTitle, scheduledDate, scheduledTime }) {

@@ -84,4 +84,17 @@ router.put(
  */
 router.get('/me', authMiddleware, authController.getMe);
 
+/**
+ * 设备自动登录（员工端）
+ * POST /api/v1/auth/device-login
+ */
+router.post(
+  '/device-login',
+  [
+    body('deviceId').trim().notEmpty().withMessage('设备ID不能为空'),
+    validate,
+  ],
+  authController.deviceLogin
+);
+
 module.exports = router;

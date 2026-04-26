@@ -111,6 +111,66 @@ class AuthController {
       next(err);
     }
   }
+
+  /**
+   * 设备自动登录（员工端）
+   * POST /api/v1/auth/device-login
+   */
+  async deviceLogin(req, res, next) {
+    try {
+      const { deviceId } = req.body;
+      const { pool } = require('../config/database');
+      const User = require('../models/User.model');
+      const { generateAccessToken, generateRefreshToken } = require('../config/jwt');
+
+      // 查找已绑定该设备的员工
+      const [bindings] = await pool.execute(
+        'SELECT * FROM device_bindings WHERE device_id = ? AND is_bound = 1 LIMIT 1',
+        [deviceId]
+      );
+      const binding = bindings[0];
+
+      if (!binding || !binding.user_id) {
+        return res.status(401).json({
+          code: 401,
+          message: '设备未绑定员工账号，请联系辅导员绑定设备',
+          data: { needBinding: true },
+        });
+      }
+
+      const user = await User.findById(binding.user_id);
+      if (!user || user.status !== 1) {
+        return res.status(401).json({
+          code: 401,
+          message: '关联的员工账号已禁用',
+          data: null,
+        });
+      }
+
+      // 生成 Token
+      const accessToken = generateAccessToken({ id: user.id, username: user.username, role: user.role });
+      const refreshToken = generateRefreshToken({ id: user.id });
+
+      // 更新设备最后活跃时间
+      await pool.execute(
+        'UPDATE device_bindings SET last_active_at = NOW() WHERE device_id = ?',
+        [deviceId]
+      );
+
+      return res.status(200).json({
+        code: 200,
+        message: 'success',
+        data: {
+          accessToken,
+          refreshToken,
+          employeeId: String(user.id),
+          employeeName: user.real_name || user.username,
+        },
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new AuthController();

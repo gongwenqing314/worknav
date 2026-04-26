@@ -214,6 +214,103 @@ class StatisticsController {
       next(err);
     }
   }
+
+  /**
+   * 获取情绪统计数据
+   * GET /api/v1/statistics/emotion?employeeId=1&startDate=xxx&endDate=xxx
+   */
+  async emotion(req, res, next) {
+    try {
+      const { employeeId, startDate, endDate } = req.query;
+
+      const conditions = [];
+      const params = [];
+
+      if (employeeId) {
+        conditions.push('er.employee_id = ?');
+        params.push(employeeId);
+      }
+      if (startDate) {
+        conditions.push('er.recorded_at >= ?');
+        params.push(startDate);
+      }
+      if (endDate) {
+        conditions.push('er.recorded_at <= ?');
+        params.push(endDate + ' 23:59:59');
+      }
+
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+      const [records] = await pool.execute(
+        `SELECT er.*, u.real_name as employeeName
+         FROM emotion_records er
+         LEFT JOIN users u ON er.employee_id = u.id
+         ${whereClause}
+         ORDER BY er.recorded_at DESC
+         LIMIT 100`,
+        params
+      );
+
+      // 按情绪类型统计
+      const distribution = {};
+      for (const r of records) {
+        distribution[r.emotion_type] = (distribution[r.emotion_type] || 0) + 1;
+      }
+
+      return success(res, {
+        records,
+        distribution,
+        total: records.length,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  /**
+   * 获取员工工作统计排行
+   * GET /api/v1/statistics/employee-work?range=month
+   */
+  async employeeWork(req, res, next) {
+    try {
+      const { range } = req.query;
+      const { startDate, endDate } = getDateRange(range || 'month');
+
+      const [rows] = await pool.execute(
+        `SELECT
+          u.id as employeeId,
+          u.real_name as employeeName,
+          COUNT(ti.id) as totalTasks,
+          SUM(CASE WHEN ti.status = 'completed' THEN 1 ELSE 0 END) as completedTasks,
+          AVG(
+            CASE WHEN ti.completed_at IS NOT NULL AND ti.started_at IS NOT NULL
+              THEN TIMESTAMPDIFF(SECOND, ti.started_at, ti.completed_at)
+            END
+          ) as avgDurationSeconds
+         FROM users u
+         LEFT JOIN task_instances ti ON ti.employee_id = u.id
+           AND ti.scheduled_date BETWEEN ? AND ?
+         WHERE u.role = 'employee' AND u.status = 1
+         GROUP BY u.id, u.real_name
+         ORDER BY completedTasks DESC`,
+        [startDate, endDate]
+      );
+
+      const ranking = rows.map(r => ({
+        ...r,
+        completionRate: r.totalTasks > 0
+          ? Math.round((r.completedTasks / r.totalTasks) * 100)
+          : 0,
+        avgDuration: r.avgDurationSeconds
+          ? `${Math.round(r.avgDurationSeconds / 60)}分钟`
+          : '-',
+      }));
+
+      return success(res, { ranking });
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new StatisticsController();

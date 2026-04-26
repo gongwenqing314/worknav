@@ -18,6 +18,20 @@ router.use(authMiddleware);
 router.get('/', notificationController.list);
 
 /**
+ * 发送通知
+ * POST /api/v1/notifications
+ */
+router.post(
+  '/',
+  [
+    body('toUserId').isInt().withMessage('接收用户ID无效'),
+    body('title').notEmpty().withMessage('标题不能为空'),
+    validate,
+  ],
+  notificationController.send
+);
+
+/**
  * 获取未读通知数量
  * GET /api/v1/notifications/unread-count
  */

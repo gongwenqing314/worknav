@@ -30,7 +30,7 @@ async function authMiddleware(req, res, next) {
     const decoded = verifyAccessToken(token);
 
     // 从数据库查询用户（确保用户仍然有效）
-    const user = await UserModel.findById(decoded.userId);
+    const user = await UserModel.findById(decoded.id || decoded.userId);
 
     if (!user) {
       return unauthorized(res, '用户不存在');
@@ -75,7 +75,7 @@ async function optionalAuth(req, res, next) {
       const token = authHeader.substring(7);
       if (token) {
         const decoded = verifyAccessToken(token);
-        const user = await UserModel.findById(decoded.userId);
+        const user = await UserModel.findById(decoded.id || decoded.userId);
         if (user && user.status === 1) {
           req.user = {
             id: user.id,

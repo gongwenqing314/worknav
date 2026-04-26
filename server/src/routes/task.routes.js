@@ -60,6 +60,12 @@ router.delete('/templates/:templateId', isCounselor, taskController.deleteTempla
 // ========== 任务实例管理 ==========
 
 /**
+ * 获取今日任务（员工端）
+ * GET /api/v1/tasks/today
+ */
+router.get('/today', allowRoles('employee'), taskController.todayTasks);
+
+/**
  * 获取任务实例列表
  * GET /api/v1/tasks/instances
  */
@@ -123,6 +129,18 @@ router.post('/instances/:instanceId/pause', allowRoles('employee'), taskControll
  */
 router.post('/instances/:instanceId/cancel', taskController.cancelTask);
 
+/**
+ * 完成任务（员工端）
+ * POST /api/v1/tasks/instances/:instanceId/complete
+ */
+router.post('/instances/:instanceId/complete', allowRoles('employee'), taskController.completeTask);
+
+/**
+ * 请求帮助（员工端）
+ * POST /api/v1/tasks/instances/:instanceId/help
+ */
+router.post('/instances/:instanceId/help', allowRoles('employee'), taskController.requestHelp);
+
 // ========== 步骤执行管理 ==========
 
 /**
@@ -140,5 +158,13 @@ router.post(
   allowRoles('employee'),
   taskController.completeStep
 );
+
+// ========== 任务监控 ==========
+
+/**
+ * 获取任务执行记录（监控页面用）
+ * GET /api/v1/tasks/:taskId/executions
+ */
+router.get('/:taskId/executions', taskController.getExecutions);
 
 module.exports = router;

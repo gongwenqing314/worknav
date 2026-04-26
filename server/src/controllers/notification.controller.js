@@ -110,6 +110,26 @@ class NotificationController {
       next(err);
     }
   }
+
+  /**
+   * 发送通知
+   * POST /api/v1/notifications
+   */
+  async send(req, res, next) {
+    try {
+      const { toUserId, title, content, type } = req.body;
+
+      const notificationId = await notificationService.sendNotification(
+        req.user.id,
+        toUserId,
+        { title, content: content || title, type: type || 'system' }
+      );
+
+      return success(res, { notificationId }, '通知已发送');
+    } catch (err) {
+      next(err);
+    }
+  }
 }
 
 module.exports = new NotificationController();

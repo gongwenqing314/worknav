@@ -12,6 +12,71 @@ const { body, param } = require('express-validator');
 // 所有情绪路由都需要认证
 router.use(authMiddleware);
 
+// ========== 辅导员端情绪监控 ==========
+
+/**
+ * 获取所有员工的实时情绪概览
+ * GET /api/v1/emotions/overview
+ */
+router.get('/overview', isCounselor, emotionController.overview);
+
+/**
+ * 获取预警列表
+ * GET /api/v1/emotions/alerts
+ */
+router.get('/alerts', isCounselor, emotionController.alerts);
+
+/**
+ * 处理预警
+ * POST /api/v1/emotions/alerts/:alertId/handle
+ */
+router.post('/alerts/:alertId/handle', isCounselor, emotionController.handleAlert);
+
+// ========== 情绪预警规则管理（仅辅导员） ==========
+// 注意：必须在 /:employeeId 通配路由之前注册，否则会被通配匹配
+
+/**
+ * 获取预警规则列表
+ * GET /api/v1/emotions/alert-rules
+ */
+router.get('/alert-rules', isCounselor, emotionController.listAlertRules);
+
+/**
+ * 创建预警规则
+ * POST /api/v1/emotions/alert-rules
+ */
+router.post(
+  '/alert-rules',
+  isCounselor,
+  [
+    body('negativeTypes').isArray({ min: 1 }).withMessage('消极情绪类型不能为空'),
+    body('consecutiveDays').isInt({ min: 1 }).withMessage('连续天数至少为1'),
+    body('minIntensity').isInt({ min: 1, max: 5 }).withMessage('最低强度范围1-5'),
+    validate,
+  ],
+  emotionController.createAlertRule
+);
+
+/**
+ * 更新预警规则
+ * PUT /api/v1/emotions/alert-rules/:ruleId
+ */
+router.put('/alert-rules/:ruleId', isCounselor, emotionController.updateAlertRule);
+
+/**
+ * 删除预警规则
+ * DELETE /api/v1/emotions/alert-rules/:ruleId
+ */
+router.delete('/alert-rules/:ruleId', isCounselor, emotionController.deleteAlertRule);
+
+// ========== 情绪记录 ==========
+
+/**
+ * 获取今日情绪记录（员工端）
+ * GET /api/v1/emotions/today
+ */
+router.get('/today', allowRoles('employee'), emotionController.todayRecords);
+
 /**
  * 记录情绪
  * POST /api/v1/emotions/record
@@ -58,42 +123,6 @@ router.get('/:employeeId', canAccessEmployee('employeeId'), emotionController.li
  * GET /api/v1/emotions/:employeeId/stats
  */
 router.get('/:employeeId/stats', canAccessEmployee('employeeId'), emotionController.getStats);
-
-// ========== 情绪预警规则管理（仅辅导员） ==========
-
-/**
- * 获取预警规则列表
- * GET /api/v1/emotions/alert-rules
- */
-router.get('/alert-rules/list', isCounselor, emotionController.listAlertRules);
-
-/**
- * 创建预警规则
- * POST /api/v1/emotions/alert-rules
- */
-router.post(
-  '/alert-rules',
-  isCounselor,
-  [
-    body('negativeTypes').isArray({ min: 1 }).withMessage('消极情绪类型不能为空'),
-    body('consecutiveDays').isInt({ min: 1 }).withMessage('连续天数至少为1'),
-    body('minIntensity').isInt({ min: 1, max: 5 }).withMessage('最低强度范围1-5'),
-    validate,
-  ],
-  emotionController.createAlertRule
-);
-
-/**
- * 更新预警规则
- * PUT /api/v1/emotions/alert-rules/:ruleId
- */
-router.put('/alert-rules/:ruleId', isCounselor, emotionController.updateAlertRule);
-
-/**
- * 删除预警规则
- * DELETE /api/v1/emotions/alert-rules/:ruleId
- */
-router.delete('/alert-rules/:ruleId', isCounselor, emotionController.deleteAlertRule);
 
 
 module.exports = router;

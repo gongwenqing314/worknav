@@ -223,6 +223,25 @@ class TaskInstanceModel {
   }
 
   /**
+   * 统计辅导员分配的任务数量
+   */
+  static async countByCounselor(counselorId, status = null) {
+    const conditions = ['ti.assigned_by = ?'];
+    const params = [counselorId];
+
+    if (status) {
+      conditions.push('ti.status = ?');
+      params.push(status);
+    }
+
+    const [rows] = await pool.execute(
+      `SELECT COUNT(*) as total FROM task_instances ti WHERE ${conditions.join(' AND ')}`,
+      params
+    );
+    return rows[0].total;
+  }
+
+  /**
    * 获取某日排班任务
    */
   static async findByDate(date, employeeId = null) {

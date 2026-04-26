@@ -58,4 +58,16 @@ router.get(
  */
 router.get('/dashboard', isCounselor, statisticsController.dashboard);
 
+/**
+ * 获取情绪统计数据
+ * GET /api/v1/statistics/emotion
+ */
+router.get('/emotion', isCounselor, statisticsController.emotion);
+
+/**
+ * 获取员工工作统计
+ * GET /api/v1/statistics/employee-work
+ */
+router.get('/employee-work', isCounselor, statisticsController.employeeWork);
+
 module.exports = router;

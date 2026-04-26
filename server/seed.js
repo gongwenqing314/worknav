@@ -4,7 +4,7 @@ async function seed() {
   const connection = await mysql.createConnection({
     host: 'localhost',
     user: 'root',
-    password: 'password123',
+    password: '',
     database: 'worknav',
     charset: 'utf8mb4'
   });
